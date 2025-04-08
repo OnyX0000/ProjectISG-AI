@@ -1,0 +1,18 @@
+# 모든 텍스트 파일은 Git 내부에서 LF 줄바꿈 사용
+* text=auto eol=lf
+
+# 바이너리 파일은 텍스트 비교(diff) 금지
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.wav binary
+*.mp4 binary
+*.zip binary
+*.pdf binary
+
+# 특정 파일은 병합 시 항상 현재 브랜치(ours) 우선
+package-lock.json merge=ours
+
+# JSON 파일은 diff에서 제외
+*.json diff=none
