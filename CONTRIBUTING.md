@@ -94,14 +94,18 @@ trim_trailing_whitespace = true
 
 ```
 app/
-├── api/            ← 라우터 계층 (역할별로 분리)
-│   ├── llm/        ← LLM 처리 (담당: ○○)
-│   ├── media/      ← 이미지/영상 처리 (담당: ○○)
-│   └── core/       ← 공통 API/인증/설정 (담당: ○○)
-├── services/       ← 비즈니스 로직
-├── models/         ← DB 모델
-├── utils/          ← 공통 유틸리티
-main.py             ← FastAPI 엔트리포인트
+├── api/
+│   └── diary/
+│       ├── routes.py         # POST /log, /generate_diary, /edit
+│       └── service.py        # 일지 생성 로직, LLM 호출
+├── core/
+│   ├── database.py           # SQLite 연결 및 세션 관리
+│   └── config.py             # 환경 설정
+├── models/
+│   └── diary_log.py          # 감성일지용 로그 테이블 정의
+├── utils/
+│   └── log_parser.py         # 행동 로그 필터링 유틸 등
+├── main.py                   # FastAPI 앱 엔트리
 ```
 
 - 각자 맡은 디렉토리 외에는 Pull Request 리뷰 후 수정
