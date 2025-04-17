@@ -16,3 +16,4 @@ class DiaryLog(Base):
     action_name = Column(String)
     detail = Column(String)
     with_ = Column("with", String)
+    screenshot = Column(String)  # ✅ 스크린샷 경로 추가
