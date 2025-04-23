@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
 from pydantic import BaseModel, Field
 from uuid import uuid4
 from sqlalchemy.orm import Session as DbSession
@@ -9,10 +9,15 @@ from typing import List, Optional
 from datetime import datetime
 import os
 import shutil
+from app.api.mbti.logic import generate_question, judge_response
+from app.utils.mbti_helper import init_mbti_state, update_score, get_session, get_mbti_profile, finalize_mbti
+from app.models.models import UserMBTI
 
 diary_router = APIRouter()
 
-UPLOAD_DIR = "C:/Wanted/Final/ProjectISG-AI/static/screenshot"
+mbti_router = APIRouter()
+
+UPLOAD_DIR = "../static/screenshot"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # DB 세션 의존성 주입
@@ -141,3 +146,104 @@ async def update_log(log_id: int, updated: LogEntry, db: DbSession = Depends(get
 
     db.commit()
     return {"message": f"ID {log_id} 로그가 수정되었습니다."}
+
+# request 모델 정의
+class MBTIAskRequest(BaseModel):
+    user_id: str
+
+@mbti_router.post("/ask")
+def ask(input: MBTIAskRequest, db: DbSession = Depends(get_db)):
+    session_state = get_session(input.user_id)
+
+    # ✅ 이미 완료된 경우 메시지 반환
+    if session_state.get("completed", False):
+        return {
+            "message": "이 사용자는 이미 MBTI 테스트를 완료했습니다.",
+            "completed": True
+        }
+
+    # ✅ 질문이 10개 이상인 경우 MBTI 최종화
+    if session_state["question_count"] >= 10:
+        mbti = finalize_mbti(input.user_id, session_state, db)
+        return {
+            "message": f"MBTI 테스트가 완료되었습니다. 결과: {mbti}",
+            "completed": True
+        }
+
+    # ✅ 계속 진행
+    history = "\n".join(session_state["conversation_history"])
+    remain = [d for d in ["I-E", "S-N", "T-F", "J-P"] if d not in session_state["asked_dimensions"]]
+    q, dim = generate_question(history, ", ".join(remain))
+    session_state["current_question"] = q
+    session_state["current_dimension"] = dim
+    session_state["question_count"] += 1
+
+    return {
+        "question": q,
+        "dimension": dim,
+        "completed": False
+    }
+
+class MBTIAnswerRequest(BaseModel):
+    user_id: str
+    response: str
+
+@mbti_router.post("/answer")
+def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
+    session_state = get_session(input.user_id)
+
+    if session_state.get("completed", False):
+        return {"message": "이미 MBTI 테스트를 완료했습니다.", "completed": True}
+
+    # 대화 기록 추가
+    session_state["conversation_history"].append(
+        f"Q: {session_state['current_question']}\nA: {input.response}"
+    )
+    session_state["current_response"] = input.response
+    session_state["dimension_counts"][session_state["current_dimension"]] += 1
+    session_state["asked_dimensions"].add(session_state["current_dimension"])
+
+    # 판단 및 점수 갱신
+    judged = judge_response(input.response, session_state["current_dimension"])
+    update_score(session_state, judged)
+
+    # 질문 카운트 갱신
+    session_state["question_count"] += 1
+
+    # ✅ 10번째 질문이면 MBTI 최종 판단 및 DB 저장
+    if session_state["question_count"] >= 10:
+        mbti_type = finalize_mbti(input.user_id, session_state, db)
+        return {
+            "message": "MBTI 테스트가 완료되었습니다.",
+            "mbti": mbti_type,
+            "name": session_state["mbti_name"],
+            "summary": session_state["mbti_summary"],
+            "content": session_state["mbti_content"],
+            "completed": True
+        }
+
+    return {
+        "message": "응답이 저장되었습니다. 다음 질문을 요청하세요.",
+        "judged": judged,
+        "completed": False
+    }
+
+@mbti_router.get("/result/{user_id}")
+def get_final_mbti(user_id: str):
+    session_state = get_session(user_id)
+    if session_state["question_count"] < 10:
+        raise HTTPException(status_code=400, detail="아직 질문이 완료되지 않았습니다.")
+
+    scores = session_state["dimension_scores"]
+    mbti = ""
+    mbti += "I" if scores["I-E"] <= 0 else "E"
+    mbti += "S" if scores["S-N"] <= 0 else "N"
+    mbti += "T" if scores["T-F"] <= 0 else "F"
+    mbti += "J" if scores["J-P"] <= 0 else "P"
+
+    return {
+        "mbti": mbti,
+        "dimension_scores": scores,
+        "conversation": session_state["conversation_history"],
+        "match_accuracy": f"{sum(session_state['question_dimension_match'])} / {len(session_state['question_dimension_match'])}"
+    }
