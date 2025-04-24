@@ -176,7 +176,7 @@ def ask(input: MBTIAskRequest, db: DbSession = Depends(get_db)):
     q, dim = generate_question(history, ", ".join(remain))
     session_state["current_question"] = q
     session_state["current_dimension"] = dim
-    session_state["question_count"] += 1
+    # session_state["question_count"] += 1
 
     return {
         "question": q,
