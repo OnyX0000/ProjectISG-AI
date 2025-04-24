@@ -22,12 +22,12 @@ class DiaryLog(Base):
 class UserMBTI(Base):
     __tablename__ = "user"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, unique=True, index=True)
-    mbti_type = Column(String)
-    name = Column(String)
-    summary = Column(String)
-    content = Column(String)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, unique=True, index=True, nullable=False)
+    mbti_type = Column(String, nullable=True)  
+    name = Column(String, nullable=True)
+    summary = Column(String, nullable=True)
+    content = Column(String, nullable=True)
 
 # 모든 LLM 초기화는 이곳에서 관리
 llm_question = ChatOllama(model="gemma3:12b", temperature=0.7)

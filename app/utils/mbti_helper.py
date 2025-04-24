@@ -65,6 +65,13 @@ def finalize_mbti(user_id: str, state: Dict, db: Session) -> str:
 
     profile = get_mbti_profile(mbti)
 
+    # 세션 상태에 프로필 정보 저장
+    state["mbti_type"] = mbti
+    state["mbti_name"] = profile["name"]
+    state["mbti_summary"] = profile["summary"]
+    state["mbti_content"] = profile["content"]
+    state["completed"] = True
+
     # DB 저장
     existing = db.query(UserMBTI).filter(UserMBTI.user_id == user_id).first()
     if existing:
