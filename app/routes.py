@@ -7,11 +7,15 @@ from app.models.models import DiaryLog
 from app.utils.action_enum import ActionType, ActionName
 from typing import List, Optional
 from datetime import datetime
+import pandas as pd
 import os
 import shutil
-from app.api.mbti.logic import generate_question, judge_response
+from app.api.mbti.logic import generate_question, judge_response 
 from app.utils.mbti_helper import init_mbti_state, update_score, get_session, get_mbti_profile, finalize_mbti
 from app.models.models import UserMBTI
+from app.utils.db_helper import get_mbti_by_user_id
+from app.utils.log_helper import get_logs_by_user_and_date
+from app.api.diary.diary_generator import run_diary_generation, format_diary_output
 
 diary_router = APIRouter()
 
@@ -247,3 +251,26 @@ def get_final_mbti(user_id: str):
         "conversation": session_state["conversation_history"],
         "match_accuracy": f"{sum(session_state['question_dimension_match'])} / {len(session_state['question_dimension_match'])}"
     }
+
+@diary_router.post("/generate_diary")
+async def generate_diary_endpoint(
+    user_id: str = Body(...),
+    ingame_date: str = Body(...),
+    db: DbSession = Depends(get_db)
+):
+    db = SessionLocal()
+
+    try:
+        mbti = get_mbti_by_user_id(db, user_id)
+        if not mbti:
+            raise HTTPException(status_code=404, detail="해당 user_id의 MBTI 정보를 찾을 수 없습니다.")
+
+        logs_df = get_logs_by_user_and_date(db, user_id, ingame_date)
+        if logs_df.empty:
+            raise HTTPException(status_code=404, detail="해당 날짜의 로그가 존재하지 않습니다.")
+
+        result_state = run_diary_generation(user_id, ingame_date, logs_df, mbti, db)  
+        return format_diary_output(result_state)
+
+    finally:
+        db.close()
