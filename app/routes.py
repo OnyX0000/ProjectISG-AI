@@ -154,19 +154,22 @@ async def update_log(log_id: int, updated: LogEntry, db: DbSession = Depends(get
 # request 모델 정의
 class MBTIAskRequest(BaseModel):
     user_id: str
+    session_id: str
 
 @mbti_router.post("/ask")
 def ask(input: MBTIAskRequest, db: DbSession = Depends(get_db)):
     session_state = get_session(input.user_id)
 
-    # ✅ 이미 완료된 경우 메시지 반환
+    # 🔹 session_id가 주어졌다면 저장
+    if input.session_id:
+        session_state["session_id"] = input.session_id
+
     if session_state.get("completed", False):
         return {
             "message": "이 사용자는 이미 MBTI 테스트를 완료했습니다.",
             "completed": True
         }
 
-    # ✅ 질문이 10개 이상인 경우 MBTI 최종화
     if session_state["question_count"] >= 10:
         mbti = finalize_mbti(input.user_id, session_state, db)
         return {
@@ -174,13 +177,11 @@ def ask(input: MBTIAskRequest, db: DbSession = Depends(get_db)):
             "completed": True
         }
 
-    # ✅ 계속 진행
     history = "\n".join(session_state["conversation_history"])
     remain = [d for d in ["I-E", "S-N", "T-F", "J-P"] if d not in session_state["asked_dimensions"]]
     q, dim = generate_question(history, ", ".join(remain))
     session_state["current_question"] = q
     session_state["current_dimension"] = dim
-    # session_state["question_count"] += 1
 
     return {
         "question": q,

@@ -25,7 +25,8 @@ class UserMBTI(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String, unique=True, index=True, nullable=False)
-    mbti_type = Column(String, nullable=True)  
+    session_id = Column(String, nullable=True)  
+    mbti_type = Column(String, nullable=True)
     name = Column(String, nullable=True)
     summary = Column(String, nullable=True)
     content = Column(String, nullable=True)

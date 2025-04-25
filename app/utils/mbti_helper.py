@@ -72,15 +72,19 @@ def finalize_mbti(user_id: str, state: Dict, db: Session) -> str:
     state["mbti_content"] = profile["content"]
     state["completed"] = True
 
+    session_id = state.get("session_id")
+
     # DB 저장
     existing = db.query(UserMBTI).filter(UserMBTI.user_id == user_id).first()
     if existing:
+        existing.session_id = session_id 
         existing.mbti_type = mbti
         existing.name = profile["name"]
         existing.summary = profile["summary"]
         existing.content = profile["content"]
     else:
         new_entry = UserMBTI(
+            session_id = session_id,
             user_id=user_id,
             mbti_type=mbti,
             name=profile["name"],
