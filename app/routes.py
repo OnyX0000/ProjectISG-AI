@@ -3,7 +3,6 @@ from pydantic import BaseModel, Field
 from uuid import uuid4
 from sqlalchemy.orm import Session as DbSession
 from app.core.database import SessionLocal
-from app.models.models import DiaryLog
 from app.utils.action_enum import ActionType, ActionName
 from typing import List, Optional
 from datetime import datetime
@@ -12,10 +11,10 @@ import os
 import shutil
 from app.api.mbti.logic import generate_question, judge_response 
 from app.utils.mbti_helper import init_mbti_state, update_score, get_session, get_mbti_profile, finalize_mbti
-from app.models.models import UserMBTI
+from app.models.models import UserLog, UserMBTI, Diary  
 from app.utils.db_helper import get_mbti_by_user_id
 from app.utils.log_helper import get_logs_by_user_and_date
-from app.api.diary.diary_generator import run_diary_generation, format_diary_output
+from app.api.diary.diary_generator import run_diary_generation, format_diary_output, save_diary_to_db
 
 diary_router = APIRouter()
 
@@ -48,38 +47,40 @@ class LogEntry(BaseModel):
 # 스크린샷 + 로그 통합 업로드 API
 @diary_router.post("/upload_with_screenshot")
 async def upload_log_with_screenshot(
-    session_id: str = Form(..., example="", description="세션 고유 식별자 (UUID)"),
-    user_id: str = Form(..., example="", description="유저 고유 식별자"),
-    timestamp: str = Form(..., example="", description="행동 발생 시간 (실제 시스템 시간)"),
-    ingame_datetime: str = Form(..., example="", description="인게임 내 시간/날짜 (예: 1일차 오전 10시)"),
-    location: str = Form(..., example="", description="행동이 발생한 장소 (예: 농장, 주방 등)"),
-    action_type: ActionType = Form(..., example="", description="행동의 대분류 (예: COOKING, FARMING)"),
-    action_name: ActionName = Form(..., example="", description="행동의 세부 명칭 (예: start_cooking)"),
-    detail: str = Form(..., example="", description="행동에 대한 상세 설명"),
-    with_: str = Form(None, example="", description="상호작용 대상자 닉네임 (선택)"),
-    file: Optional[UploadFile] = File(None, description="스크린샷 이미지 파일 (선택)"),
+    session_id: str = Form(...),
+    user_id: str = Form(...),
+    timestamp: str = Form(...),
+    ingame_datetime: str = Form(...),
+    location: str = Form(...),
+    action_type: str = Form(...),
+    action_name: str = Form(...),
+    detail: str = Form(...),
+    with_: str = Form(None),
+    file: UploadFile = File(None),
     db: DbSession = Depends(get_db)
 ):
     screenshot_path = None
 
     if file:
         ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        user_folder = os.path.join(UPLOAD_DIR, user_id)
+        os.makedirs(user_folder, exist_ok=True)
         filename = f"screenshot_{session_id}_{ts}.png"
-        file_path = os.path.join(UPLOAD_DIR, filename)
+        file_path = os.path.join(user_folder, filename)
 
         with open(file_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        screenshot_path = file_path
+        screenshot_path = os.path.relpath(file_path, ".").replace("\\", "/")  # ✅ 상대경로 저장
 
-    log = DiaryLog(
+    log = UserLog(
         session_id=session_id,
         user_id=user_id,
         timestamp=timestamp,
         ingame_datetime=ingame_datetime,
         location=location,
-        action_type=action_type.value,
-        action_name=action_name.value,
+        action_type=action_type,
+        action_name=action_name,
         detail=detail,
         with_=with_,
         screenshot=screenshot_path
@@ -89,8 +90,8 @@ async def upload_log_with_screenshot(
     db.commit()
 
     return {
-        "message": "스크린샷 포함 여부와 관계없이 로그 저장 완료",
-        "screenshot": screenshot_path or "이미지 없음"
+        "message": "로그 저장 완료",
+        "screenshot": screenshot_path or "스크린샷 없음"
     }
 
 # UUID 세션 ID 발급 API
@@ -102,7 +103,7 @@ async def generate_session_id():
 # 모든 로그 조회 API
 @diary_router.get("/logs")
 async def get_all_logs(db: DbSession = Depends(get_db)):
-    logs = db.query(DiaryLog).all()
+    logs = db.query(UserLog).all()
     result = []
     for log in logs:
         result.append({
@@ -123,7 +124,7 @@ async def get_all_logs(db: DbSession = Depends(get_db)):
 # 개별 로그 삭제 API
 @diary_router.delete("/delete/{log_id}")
 async def delete_log(log_id: int, db: DbSession = Depends(get_db)):
-    log = db.query(DiaryLog).filter(DiaryLog.id == log_id).first()
+    log = db.query(UserLog).filter(UserLog.id == log_id).first()
     if not log:
         return {"error": f"ID {log_id}에 해당하는 로그가 없습니다."}
     db.delete(log)
@@ -133,7 +134,7 @@ async def delete_log(log_id: int, db: DbSession = Depends(get_db)):
 # 로그 수정 API
 @diary_router.put("/update/{log_id}")
 async def update_log(log_id: int, updated: LogEntry, db: DbSession = Depends(get_db)):
-    log = db.query(DiaryLog).filter(DiaryLog.id == log_id).first()
+    log = db.query(UserLog).filter(UserLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="해당 로그를 찾을 수 없습니다.")
 
@@ -259,8 +260,6 @@ async def generate_diary_endpoint(
     ingame_date: str = Body(...),
     db: DbSession = Depends(get_db)
 ):
-    db = SessionLocal()
-
     try:
         mbti = get_mbti_by_user_id(db, user_id)
         if not mbti:
@@ -270,8 +269,51 @@ async def generate_diary_endpoint(
         if logs_df.empty:
             raise HTTPException(status_code=404, detail="해당 날짜의 로그가 존재하지 않습니다.")
 
-        result_state = run_diary_generation(user_id, ingame_date, logs_df, mbti, db)  
+        result_state = run_diary_generation(user_id, ingame_date, logs_df, mbti, db, save_to_db=False)
         return format_diary_output(result_state)
+
+    finally:
+        db.close()
+
+
+@diary_router.post("/save_diary")
+async def save_diary_endpoint(
+    user_id: str = Body(...),
+    ingame_date: str = Body(...),
+    diary_content: str = Body(...),
+    db: DbSession = Depends(get_db)
+):
+    try:
+        save_diary_to_db(db, user_id, ingame_date, diary_content)
+        return {"message": "Diary saved successfully."}
+
+    finally:
+        db.close()
+
+@diary_router.post("/get_all_diaries")
+async def get_all_diaries_endpoint(
+    user_id: str = Body(...),
+    session_id: str = Body(...),
+    db: DbSession = Depends(get_db)
+):
+    try:
+        diaries = db.query(Diary).filter(Diary.user_id == user_id).all()
+
+        if not diaries:
+            raise HTTPException(status_code=404, detail="해당 user_id로 저장된 일지가 없습니다.")
+
+        return {
+            "user_id": user_id,
+            "session_id": session_id,
+            "diaries": [
+                {
+                    "diary_id": diary.id,
+                    "ingame_datetime": diary.ingame_datetime,
+                    "content": diary.content,  
+                }
+                for diary in diaries
+            ]
+        }
 
     finally:
         db.close()

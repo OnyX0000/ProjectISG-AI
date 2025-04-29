@@ -63,6 +63,7 @@ def assign_emotion_node(state: DiaryState) -> DiaryState:
 
 def generate_diary_node_factory(mbti: str):
     chain = prompt_template | llm | StrOutputParser()
+
     def node(state: DiaryState) -> DiaryState:
         diary = chain.invoke({
             "user_id": state["user_id"],
@@ -75,9 +76,11 @@ def generate_diary_node_factory(mbti: str):
         })
         state['diary'] = diary
         return state
+
     return node
 
-default_diary_node = generate_diary_node_factory("INFP")
+
+default_diary_node = generate_diary_node_factory("INTP")
 
 def build_diary_graph() -> StateGraph:
     mbti_list = ["INTP", "ENTP", "INFJ", "ESFJ", "INFP", "ISFP", "ISTJ", "ENFP", "ESTJ", "ISTP", "ESTP", "ISFJ", "ENTJ", "ENFJ", "INTJ", "ESFP"]

@@ -5,7 +5,7 @@ from langchain.embeddings import OllamaEmbeddings
 
 Base = declarative_base()
 
-class DiaryLog(Base):
+class UserLog(Base):
     __tablename__ = "game_logs"
 
     id = Column(Integer, primary_key=True, index=True)
