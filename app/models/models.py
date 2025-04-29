@@ -33,10 +33,13 @@ class UserMBTI(Base):
 
 class Diary(Base):
     __tablename__ = "diary"
+    
     id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String, nullable=True)
     user_id = Column(String, ForeignKey("user.user_id"))
     ingame_datetime = Column(String)
     content = Column(String)
+    best_screenshot_path = Column(String, nullable=True)
 
 # 모든 LLM 초기화는 이곳에서 관리
 llm_question = ChatOllama(model="gemma3:12b", temperature=0.7)

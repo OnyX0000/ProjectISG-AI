@@ -20,7 +20,7 @@ diary_router = APIRouter()
 
 mbti_router = APIRouter()
 
-UPLOAD_DIR = "../static/screenshot"
+UPLOAD_DIR = "static/screenshot"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # DB 세션 의존성 주입
@@ -256,6 +256,7 @@ def get_final_mbti(user_id: str):
 
 @diary_router.post("/generate_diary")
 async def generate_diary_endpoint(
+    session_id: str = Body(...),
     user_id: str = Body(...),
     ingame_date: str = Body(...),
     db: DbSession = Depends(get_db)
@@ -265,11 +266,11 @@ async def generate_diary_endpoint(
         if not mbti:
             raise HTTPException(status_code=404, detail="해당 user_id의 MBTI 정보를 찾을 수 없습니다.")
 
-        logs_df = get_logs_by_user_and_date(db, user_id, ingame_date)
+        logs_df = logs_df = get_logs_by_user_and_date(db, session_id, user_id, ingame_date)
         if logs_df.empty:
             raise HTTPException(status_code=404, detail="해당 날짜의 로그가 존재하지 않습니다.")
 
-        result_state = run_diary_generation(user_id, ingame_date, logs_df, mbti, db, save_to_db=False)
+        result_state = run_diary_generation(session_id, user_id, ingame_date, logs_df, mbti, db, save_to_db=False)
         return format_diary_output(result_state)
 
     finally:
@@ -278,13 +279,15 @@ async def generate_diary_endpoint(
 
 @diary_router.post("/save_diary")
 async def save_diary_endpoint(
+    session_id: str = Body(...),
     user_id: str = Body(...),
     ingame_date: str = Body(...),
     diary_content: str = Body(...),
+    best_screenshot_path: str = Body(None),
     db: DbSession = Depends(get_db)
 ):
     try:
-        save_diary_to_db(db, user_id, ingame_date, diary_content)
+        save_diary_to_db(db, session_id, user_id, ingame_date, diary_content, best_screenshot_path)
         return {"message": "Diary saved successfully."}
 
     finally:
@@ -297,10 +300,13 @@ async def get_all_diaries_endpoint(
     db: DbSession = Depends(get_db)
 ):
     try:
-        diaries = db.query(Diary).filter(Diary.user_id == user_id).all()
+        diaries = db.query(Diary).filter(
+            Diary.user_id == user_id,
+            Diary.session_id == session_id  
+        ).all()
 
         if not diaries:
-            raise HTTPException(status_code=404, detail="해당 user_id로 저장된 일지가 없습니다.")
+            raise HTTPException(status_code=404, detail="해당 user_id와 session_id 조합으로 저장된 일지가 없습니다.")
 
         return {
             "user_id": user_id,
@@ -309,7 +315,8 @@ async def get_all_diaries_endpoint(
                 {
                     "diary_id": diary.id,
                     "ingame_datetime": diary.ingame_datetime,
-                    "content": diary.content,  
+                    "content": diary.content,
+                    "best_screenshot_path": diary.best_screenshot_path  
                 }
                 for diary in diaries
             ]
