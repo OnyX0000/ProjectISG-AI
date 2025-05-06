@@ -1,4 +1,3 @@
-# ✅ app/api/diary/graph.py
 from typing import TypedDict
 import pandas as pd
 import random
@@ -8,7 +7,8 @@ from langchain_core.output_parsers import StrOutputParser
 
 from app.models.models import diary_llm as llm
 from app.api.diary.rag import rag_chain
-from app.api.diary.prompt_diary import prompt_template
+from app.api.diary.prompt_diary import prompt_template, emotion_tag_chain
+
 
 class DiaryState(TypedDict, total=False):
     user_id: str
@@ -79,6 +79,11 @@ def generate_diary_node_factory(mbti: str):
 
     return node
 
+def generate_emotion_info(state: DiaryState) -> DiaryState:
+    result = emotion_tag_chain.invoke({"diary": state["diary"]})
+    state["emotion_keywords"] = result.get("keywords", [])
+    state["emotion_tags"] = result.get("emotion_tags", [])
+    return state
 
 default_diary_node = generate_diary_node_factory("INTP")
 
@@ -94,6 +99,7 @@ def build_diary_graph() -> StateGraph:
         builder.add_node(f"generate_diary_{mbti}", RunnableLambda(generate_diary_node_factory(mbti)))
     builder.add_node("generate_diary_default", RunnableLambda(default_diary_node))
 
+    builder.add_node("generate_emotion_info", RunnableLambda(generate_emotion_info))
     builder.add_node("output", lambda state: state)
 
     builder.set_entry_point("prepare_log")
@@ -110,7 +116,8 @@ def build_diary_graph() -> StateGraph:
     builder.add_conditional_edges("assign_emotion", route_by_mbti, route_map)
 
     for node in route_map.values():
-        builder.add_edge(node, "output")
+        builder.add_edge(node, "generate_emotion_info")
+    builder.add_edge("generate_emotion_info", "output")
 
     builder.set_finish_point("output")
     return builder.compile()

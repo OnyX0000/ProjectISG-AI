@@ -1,28 +1,41 @@
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from app.models.models import UserLog
+from app.utils.image_helper import run_captioning
+from app.utils.log_helper import convert_path_to_url
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+from app.models.models import embedding_model
+import os
 
-# 스크린샷 선택용 프롬프트
-select_screenshot_prompt = ChatPromptTemplate.from_template(
-"""
-다음은 유저의 감성 일지야:
+# ✅ 문장 임베딩 모델 로드 (한글 포함)
+model = embedding_model
 
-{diary}
+def select_best_screenshot(diary_text: str, screenshot_paths: list[str]) -> str:
+    """
+    일지 내용과 가장 유사한 스크린샷을 선택하여 URL로 반환
+    """
+    if not screenshot_paths:
+        return None
 
-아래는 여러 스크린샷 경로야:
+    diary_embedding = model.encode([diary_text])[0]
 
-{screenshots}
+    best_score = -1
+    best_path = None
 
-일지 내용과 가장 어울리는 스크린샷 경로 하나만 골라줘.
-경로만 그대로 출력해. (설명 추가하지 마.)
-""")
+    for path in screenshot_paths:
+        if not os.path.exists(path):
+            continue
 
-def select_best_screenshot(diary: str, screenshot_paths: list[str]) -> str:
-    from app.models.models import llm_question  # 사용할 LLM 객체 가져오기
-    chain = select_screenshot_prompt | llm_question | StrOutputParser()
-    screenshots_text = "\n".join(screenshot_paths)
-    best_screenshot = chain.invoke({
-        "diary": diary,
-        "screenshots": screenshots_text
-    })
-    return best_screenshot.strip()
+        try:
+            caption = run_captioning(path)
+            caption_embedding = model.encode([caption])[0]
+            score = cosine_similarity([diary_embedding], [caption_embedding])[0][0]
+
+            if score > best_score:
+                best_score = score
+                best_path = path
+        except Exception:
+            continue
+
+    if best_path:
+        return convert_path_to_url(best_path)
+    else:
+        return None
