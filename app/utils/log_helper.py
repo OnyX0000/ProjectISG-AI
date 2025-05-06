@@ -42,3 +42,13 @@ def to_relative_screenshot_path(full_path: str) -> str:
         static_index = full_path.index("static")
         return full_path[static_index:].replace("\\", "/")  # 윈도우 경로 \\ 를 /로 변환
     return full_path
+
+STATIC_BASE_URL = "http://localhost:8000/static"
+
+def convert_path_to_url(relative_path: str) -> str:
+    """
+    DB에 저장된 상대 경로 → 웹에서 접근 가능한 정적 파일 URL로 변환
+    예: ../static/screenshot/1/xxx.png → http://localhost:8000/static/screenshot/1/xxx.png
+    """
+    clean_path = relative_path.replace("../static", "").lstrip("/")
+    return f"{STATIC_BASE_URL}/{clean_path}"
