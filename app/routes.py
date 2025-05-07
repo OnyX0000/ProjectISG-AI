@@ -336,3 +336,19 @@ async def render_image(image_name: str):
     # ✅ 다운로드가 아닌 브라우저에 바로 렌더링하도록 설정
     headers = {"Content-Disposition": "inline"}
     return FileResponse(file_path, media_type='image/png', headers=headers)
+
+@log_router.delete("/diary/delete")
+async def delete_diary(session_id: str, user_id: str, db: DbSession = Depends(get_db)):
+    """
+    특정 session_id와 user_id에 해당하는 Diary 데이터를 삭제합니다.
+    """
+    diaries = db.query(Diary).filter(Diary.session_id == session_id, Diary.user_id == user_id).all()
+    
+    if not diaries:
+        raise HTTPException(status_code=404, detail="삭제할 Diary 데이터가 존재하지 않습니다.")
+    
+    for diary in diaries:
+        db.delete(diary)
+    
+    db.commit()
+    return {"message": f"{len(diaries)}개의 일지가 삭제되었습니다."}

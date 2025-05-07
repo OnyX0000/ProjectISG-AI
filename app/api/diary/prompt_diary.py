@@ -10,17 +10,14 @@ prompt_template = ChatPromptTemplate.from_template("""
 활동 로그:
 {log_text}
 
-감정 키워드: {emotion_keywords}
-감정 태그: {emotion_tags}
-
 위 정보를 바탕으로 서정적인 감성 일지를 다음 형식으로 생성해줘.
 
 날짜: 로그 기반 날짜
 
-# 일지 내용:
+# 일지 내용
 
 # 오늘의 감정 기록:
-(짧고 시적인 감정 회고 한 줄)
+(시적인 감정 회고)
 
 지침:
 1. 위 포맷을 꼭 유지하면서, 사용자 시점에서 활동 기반 감정적 일지를 작성해.

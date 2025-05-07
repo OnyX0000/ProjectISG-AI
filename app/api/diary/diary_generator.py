@@ -24,15 +24,15 @@ def save_diary_to_db(
     emotion_tags_str = ",".join(emotion_tags) if emotion_tags else None
     emotion_keywords_str = ",".join(emotion_keywords) if emotion_keywords else None
 
-    # 🔍 디버그 로그 추가
-    print("📝 Saving to DB")
-    print(f"Session ID: {session_id}")
-    print(f"User ID: {user_id}")
-    print(f"Ingame Date: {date}")
-    print(f"Content: {content}")
-    print(f"Best Screenshot Path: {best_screenshot_path}")
-    print(f"Emotion Tags: {emotion_tags_str}")
-    print(f"Emotion Keywords: {emotion_keywords_str}")
+    # # 🔍 디버그 로그 추가
+    # print("📝 Saving to DB")
+    # print(f"Session ID: {session_id}")
+    # print(f"User ID: {user_id}")
+    # print(f"Ingame Date: {date}")
+    # print(f"Content: {content}")
+    # print(f"Best Screenshot Path: {best_screenshot_path}")
+    # print(f"Emotion Tags: {emotion_tags_str}")
+    # print(f"Emotion Keywords: {emotion_keywords_str}")
 
     # ✅ DB 객체 생성
     try:
