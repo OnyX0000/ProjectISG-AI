@@ -1,7 +1,13 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, asc
 import pandas as pd
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 from app.models.models import UserLog
+
+load_dotenv()
+STATIC_BASE_URL = os.getenv("STATIC_BASE_URL")
 
 def get_logs_by_user_and_date(db: Session, session_id: str, user_id: str, ingame_date: str) -> pd.DataFrame:
     logs = db.query(UserLog).filter(
@@ -43,12 +49,23 @@ def to_relative_screenshot_path(full_path: str) -> str:
         return full_path[static_index:].replace("\\", "/")  # 윈도우 경로 \\ 를 /로 변환
     return full_path
 
-STATIC_BASE_URL = "http://localhost:8000/static"
+# 기준 static 디렉토리
+STATIC_ROOT = Path("static").resolve()
 
 def convert_path_to_url(relative_path: str) -> str:
     """
-    DB에 저장된 상대 경로 → 웹에서 접근 가능한 정적 파일 URL로 변환
-    예: ../static/screenshot/1/xxx.png → http://localhost:8000/static/screenshot/1/xxx.png
+    상대 경로를 보안적으로 안전한 URL로 변환 (디렉토리 이탈 방지 + BASE_URL 환경 설정)
     """
-    clean_path = relative_path.replace("../static", "").lstrip("/")
-    return f"{STATIC_BASE_URL}/{clean_path}"
+
+    # 절대 경로 계산
+    full_path = (Path("../static") / Path(relative_path).name).resolve()
+
+    # 디렉토리 이탈 여부 확인
+    if not str(full_path).startswith(str(STATIC_ROOT)):
+        raise ValueError(f"⚠️ Unsafe path detected: {relative_path}")
+
+    # static 하위 경로만 추출
+    relative_to_static = full_path.relative_to(STATIC_ROOT)
+    url_path = f"{STATIC_BASE_URL}/{relative_to_static.as_posix()}"
+
+    return url_path
