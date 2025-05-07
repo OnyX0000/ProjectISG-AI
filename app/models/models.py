@@ -40,6 +40,8 @@ class Diary(Base):
     ingame_datetime = Column(String)
     content = Column(String)
     best_screenshot_path = Column(String, nullable=True)
+    emotion_tags = Column(String, nullable=True)         
+    emotion_keywords = Column(String, nullable=True)  
 
 # 모든 LLM 초기화는 이곳에서 관리
 llm_question = ChatOllama(model="gemma3:12b", temperature=0.7)

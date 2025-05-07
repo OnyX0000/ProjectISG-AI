@@ -248,8 +248,37 @@ async def save_diary_endpoint(
     screenshot_paths = logs_df['screenshot'].dropna().unique().tolist()
     best_screenshot_path = select_best_screenshot(diary_content, screenshot_paths)
 
+<<<<<<< HEAD
+    # ✅ 3️⃣ 감정 태그/키워드 생성
+    from app.api.diary.prompt_diary import emotion_tag_chain
+    emotion_result = emotion_tag_chain.invoke({"diary": diary_content})
+    
+    emotion_keywords = emotion_result.get("keywords", [])
+    emotion_tags = emotion_result.get("emotion_tags", [])
+
+    if not emotion_keywords:
+        emotion_keywords = ["미정"]
+        print("⚠️ 감정 키워드 생성에 실패하여 기본값 '미정'으로 설정되었습니다.")
+    
+    if not emotion_tags:
+        emotion_tags = ["없음"]
+        print("⚠️ 감정 태그 생성에 실패하여 기본값 '없음'으로 설정되었습니다.")
+
+    # 4️⃣ DB에 저장
+    save_diary_to_db(
+        db, 
+        session_id, 
+        user_id, 
+        ingame_date, 
+        diary_content, 
+        best_screenshot_path,
+        emotion_tags, 
+        emotion_keywords
+    )
+=======
     # 3️⃣ DB에 저장
     save_diary_to_db(db, session_id, user_id, ingame_date, diary_content, best_screenshot_path)
+>>>>>>> e6a5c7ea40377fd30a8a7b9b83e900b277d4f1b7
     
     # ✅ 파일명만 반환
     best_screenshot_filename = None
@@ -258,7 +287,13 @@ async def save_diary_endpoint(
 
     return {
         "message": "Diary saved successfully.",
+<<<<<<< HEAD
+        "best_screenshot_filename": best_screenshot_filename,
+        "emotion_tags": emotion_tags,
+        "emotion_keywords": emotion_keywords
+=======
         "best_screenshot_filename": best_screenshot_filename
+>>>>>>> e6a5c7ea40377fd30a8a7b9b83e900b277d4f1b7
     }
 
 # ✅ FileResponse로 반환할 파일 기본 경로 설정

@@ -16,17 +16,41 @@ def save_diary_to_db(
     emotion_tags: list[str] = None,
     emotion_keywords: list[str] = None
 ):
-    diary = Diary(
-        session_id=session_id,
-        user_id=user_id,
-        ingame_datetime=date,
-        content=content,
-        best_screenshot_path=best_screenshot_path,
-        emotion_tags=",".join(emotion_tags or []),
-        emotion_keywords=",".join(emotion_keywords or [])
-    )
-    db.add(diary)
-    db.commit()
+    # ✅ None 체크 및 경로 수정
+    if best_screenshot_path and best_screenshot_path.startswith("None"):
+        best_screenshot_path = best_screenshot_path.replace("None", "")
+    
+    # ✅ 기본값 설정: None일 경우에도 "없음"으로 명시
+    emotion_tags_str = ",".join(emotion_tags) if emotion_tags else None
+    emotion_keywords_str = ",".join(emotion_keywords) if emotion_keywords else None
+
+    # 🔍 디버그 로그 추가
+    print("📝 Saving to DB")
+    print(f"Session ID: {session_id}")
+    print(f"User ID: {user_id}")
+    print(f"Ingame Date: {date}")
+    print(f"Content: {content}")
+    print(f"Best Screenshot Path: {best_screenshot_path}")
+    print(f"Emotion Tags: {emotion_tags_str}")
+    print(f"Emotion Keywords: {emotion_keywords_str}")
+
+    # ✅ DB 객체 생성
+    try:
+        diary = Diary(
+            session_id=session_id,
+            user_id=user_id,
+            ingame_datetime=date,
+            content=content,
+            best_screenshot_path=best_screenshot_path if best_screenshot_path else None,
+            emotion_tags=emotion_tags_str if emotion_tags_str else None,
+            emotion_keywords=emotion_keywords_str if emotion_keywords_str else None
+        )
+        db.add(diary)
+        db.commit()
+        print("✅ DB Commit 성공")
+    except Exception as e:
+        print(f"❌ DB Commit 실패: {e}")
+        db.rollback()
 
 def run_diary_generation(
     session_id: str,
@@ -51,8 +75,15 @@ def run_diary_generation(
 
     # 감정 키워드/태그 별도 체인 호출
     emotion_result = emotion_tag_chain.invoke({"diary": diary_content})
+    
+    # 💡 여기서 None 처리 추가
     emotion_keywords = emotion_result.get("keywords", [])
     emotion_tags = emotion_result.get("emotion_tags", [])
+
+    if not emotion_keywords:
+        print("⚠️ 감정 키워드 생성에 실패했습니다.")
+    if not emotion_tags:
+        print("⚠️ 감정 태그 생성에 실패했습니다.")
 
     # 스크린샷 경로 추출
     screenshot_paths = group['screenshot'].dropna().unique().tolist()
