@@ -56,9 +56,8 @@ def convert_path_to_url(relative_path: str) -> str:
     """
     상대 경로를 보안적으로 안전한 URL로 변환 (디렉토리 이탈 방지 + BASE_URL 환경 설정)
     """
-
     # 절대 경로 계산
-    full_path = (Path("../static") / Path(relative_path).name).resolve()
+    full_path = (STATIC_ROOT / Path(relative_path)).resolve()
 
     # 디렉토리 이탈 여부 확인
     if not str(full_path).startswith(str(STATIC_ROOT)):

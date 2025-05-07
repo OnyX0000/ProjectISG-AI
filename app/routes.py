@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from uuid import uuid4
 from sqlalchemy.orm import Session as DbSession
@@ -6,6 +7,7 @@ from app.core.database import SessionLocal
 from app.utils.action_enum import ActionType, ActionName
 from typing import List, Optional
 from datetime import datetime
+from pathlib import Path
 import pandas as pd
 import os
 import shutil
@@ -13,8 +15,9 @@ from app.api.mbti.logic import generate_question, judge_response
 from app.utils.mbti_helper import init_mbti_state, update_score, get_session, get_mbti_profile, finalize_mbti
 from app.models.models import UserLog, UserMBTI, Diary  
 from app.utils.db_helper import get_mbti_by_user_id
-from app.utils.log_helper import get_logs_by_user_and_date
+from app.utils.log_helper import get_logs_by_user_and_date, convert_path_to_url
 from app.api.diary.diary_generator import run_diary_generation, format_diary_output, save_diary_to_db
+from app.utils.image_helper import save_screenshot
 
 # Routers
 diary_router = APIRouter()
@@ -56,17 +59,14 @@ async def upload_log_with_screenshot(
     file: UploadFile = File(None),
     db: DbSession = Depends(get_db)
 ):
+    """
+    로그와 스크린샷을 동시에 업로드하고 DB에 저장합니다.
+    """
     screenshot_path = None
     if file:
-        ts = datetime.now().strftime("%Y%m%d%H%M%S")
-        user_folder = os.path.join(UPLOAD_DIR, user_id)
-        os.makedirs(user_folder, exist_ok=True)
-        filename = f"screenshot_{session_id}_{ts}.png"
-        file_path = os.path.join(user_folder, filename)
-        with open(file_path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
-        screenshot_path = os.path.relpath(file_path, ".").replace("\\", "/")
+        screenshot_path = save_screenshot(file, user_id, session_id)
 
+    # DB에 로그 저장
     log = UserLog(
         session_id=session_id,
         user_id=user_id,
@@ -81,7 +81,11 @@ async def upload_log_with_screenshot(
     )
     db.add(log)
     db.commit()
-    return {"message": "로그 저장 완료", "screenshot": screenshot_path or "스크린샷 없음"}
+
+    return {
+        "message": "로그 저장 완료",
+        "screenshot": screenshot_path or "스크린샷 없음"
+    }
 
 @diary_router.post("/new_session")
 async def generate_session_id():
@@ -129,7 +133,7 @@ class MBTIAskRequest(BaseModel):
     session_id: str
 
 @mbti_router.post("/ask")
-def ask(input: MBTIAskRequest, db: DbSession = Depends(get_db)):
+async def ask(input: MBTIAskRequest, db: DbSession = Depends(get_db)):
     session_state = get_session(input.user_id)
     if input.session_id:
         session_state["session_id"] = input.session_id
@@ -150,7 +154,7 @@ class MBTIAnswerRequest(BaseModel):
     response: str
 
 @mbti_router.post("/answer")
-def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
+async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
     session_state = get_session(input.user_id)
     if session_state.get("completed", False):
         return {"message": "이미 MBTI 테스트를 완료했습니다.", "completed": True}
@@ -175,7 +179,7 @@ def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
     return {"message": "응답이 저장되었습니다. 다음 질문을 요청하세요.", "judged": judged, "completed": False}
 
 @mbti_router.get("/result/{user_id}")
-def get_final_mbti(user_id: str):
+async def get_final_mbti(user_id: str):
     session_state = get_session(user_id)
     if session_state["question_count"] < 10:
         raise HTTPException(status_code=400, detail="아직 질문이 완료되지 않았습니다.")
@@ -199,17 +203,32 @@ async def generate_diary_endpoint(
     ingame_date: str = Body(...),
     db: DbSession = Depends(get_db)
 ):
+    # 1️⃣ MBTI 정보 가져오기
     mbti = get_mbti_by_user_id(db, user_id)
     if not mbti:
         raise HTTPException(status_code=404, detail="해당 user_id의 MBTI 정보를 찾을 수 없습니다.")
+
+    # 2️⃣ 로그 정보 가져오기
     logs_df = get_logs_by_user_and_date(db, session_id, user_id, ingame_date)
     if logs_df.empty:
         raise HTTPException(status_code=404, detail="해당 날짜의 로그가 존재하지 않습니다.")
+
+    # 3️⃣ 다이어리 생성 및 대표 이미지 선택
     result_state = run_diary_generation(session_id, user_id, ingame_date, logs_df, mbti, db, save_to_db=False)
-    return format_diary_output(result_state)
+    
+    # ✅ 대표 이미지 파일명만 추출
+    best_screenshot_filename = None
+    if result_state.get("best_screenshot_path"):
+        best_screenshot_filename = Path(result_state["best_screenshot_path"]).name
+    
+    # ✅ 최종 응답 생성
+    response = format_diary_output(result_state)
+    response["best_screenshot_filename"] = best_screenshot_filename
+
+    return response
 
 @diary_router.post("/regenerate_emotion")
-def regenerate_emotion(diary_text: str):
+async def regenerate_emotion(diary_text: str):
     from app.api.diary.diary_generator import regenerate_emotion_info
     return regenerate_emotion_info(diary_text)
 
@@ -219,11 +238,31 @@ async def save_diary_endpoint(
     user_id: str = Body(...),
     ingame_date: str = Body(...),
     diary_content: str = Body(...),
-    best_screenshot_path: str = Body(None),
     db: DbSession = Depends(get_db)
 ):
+    # 1️⃣ 로그 정보 가져오기
+    logs_df = get_logs_by_user_and_date(db, session_id, user_id, ingame_date)
+    
+    # 2️⃣ 대표 이미지 다시 찾기
+    from app.api.diary.screenshot_selector import select_best_screenshot
+    screenshot_paths = logs_df['screenshot'].dropna().unique().tolist()
+    best_screenshot_path = select_best_screenshot(diary_content, screenshot_paths)
+
+    # 3️⃣ DB에 저장
     save_diary_to_db(db, session_id, user_id, ingame_date, diary_content, best_screenshot_path)
-    return {"message": "Diary saved successfully."}
+    
+    # ✅ 파일명만 반환
+    best_screenshot_filename = None
+    if best_screenshot_path:
+        best_screenshot_filename = Path(best_screenshot_path).name
+
+    return {
+        "message": "Diary saved successfully.",
+        "best_screenshot_filename": best_screenshot_filename
+    }
+
+# ✅ FileResponse로 반환할 파일 기본 경로 설정
+BASE_IMAGE_PATH = Path("static/screenshot")
 
 @diary_router.post("/get_all_diaries")
 async def get_all_diaries_endpoint(
@@ -231,21 +270,43 @@ async def get_all_diaries_endpoint(
     session_id: str = Body(...),
     db: DbSession = Depends(get_db)
 ):
+    # DB에서 일지 조회
     diaries = db.query(Diary).filter(
         Diary.user_id == user_id,
         Diary.session_id == session_id
     ).all()
+
     if not diaries:
         raise HTTPException(status_code=404, detail="해당 user_id와 session_id 조합으로 저장된 일지가 없습니다.")
-    return {
+
+    # ✅ 결과 생성
+    result = {
         "user_id": user_id,
         "session_id": session_id,
-        "diaries": [
-            {
-                "diary_id": d.id,
-                "ingame_datetime": d.ingame_datetime,
-                "content": d.content,
-                "best_screenshot_path": d.best_screenshot_path
-            } for d in diaries
-        ]
+        "diaries": []
     }
+
+    for diary in diaries:
+        # 파일명만 추출
+        screenshot_name = Path(diary.best_screenshot_path).name if diary.best_screenshot_path else None
+
+        # ✅ 파일명만 반환
+        result["diaries"].append({
+            "diary_id": diary.id,
+            "ingame_datetime": diary.ingame_datetime,
+            "content": diary.content,
+            "best_screenshot_filename": screenshot_name
+        })
+
+    return result
+
+# ✅ 파일을 다운로드가 아닌 화면에 바로 렌더링
+@diary_router.get("/render_image/{image_name}")
+async def render_image(image_name: str):
+    file_path = BASE_IMAGE_PATH / image_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="파일이 존재하지 않습니다.")
+    
+    # ✅ 다운로드가 아닌 브라우저에 바로 렌더링하도록 설정
+    headers = {"Content-Disposition": "inline"}
+    return FileResponse(file_path, media_type='image/png', headers=headers)
