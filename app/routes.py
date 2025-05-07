@@ -22,6 +22,7 @@ from app.utils.image_helper import save_screenshot
 # Routers
 diary_router = APIRouter()
 mbti_router = APIRouter()
+log_router = APIRouter()
 
 UPLOAD_DIR = "static/screenshot"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -45,7 +46,7 @@ class LogEntry(BaseModel):
     with_: Optional[str] = None
     screenshot: Optional[str] = None
 
-@diary_router.post("/upload_with_screenshot")
+@log_router.post("/upload_with_screenshot")
 async def upload_log_with_screenshot(
     session_id: str = Form(...),
     user_id: str = Form(...),
@@ -66,7 +67,6 @@ async def upload_log_with_screenshot(
     if file:
         screenshot_path = save_screenshot(file, user_id, session_id)
 
-    # DB에 로그 저장
     log = UserLog(
         session_id=session_id,
         user_id=user_id,
@@ -91,7 +91,7 @@ async def upload_log_with_screenshot(
 async def generate_session_id():
     return {"session_id": str(uuid4())}
 
-@diary_router.get("/logs")
+@log_router.get("/logs")
 async def get_all_logs(db: DbSession = Depends(get_db)):
     logs = db.query(UserLog).all()
     result = [{
@@ -109,7 +109,7 @@ async def get_all_logs(db: DbSession = Depends(get_db)):
     } for log in logs]
     return {"logs": result}
 
-@diary_router.delete("/delete/{log_id}")
+@log_router.delete("/delete/{log_id}")
 async def delete_log(log_id: int, db: DbSession = Depends(get_db)):
     log = db.query(UserLog).filter(UserLog.id == log_id).first()
     if not log:
@@ -118,7 +118,7 @@ async def delete_log(log_id: int, db: DbSession = Depends(get_db)):
     db.commit()
     return {"message": f"ID {log_id} 로그가 삭제되었습니다."}
 
-@diary_router.put("/update/{log_id}")
+@log_router.put("/update/{log_id}")
 async def update_log(log_id: int, updated: LogEntry, db: DbSession = Depends(get_db)):
     log = db.query(UserLog).filter(UserLog.id == log_id).first()
     if not log:
@@ -248,7 +248,6 @@ async def save_diary_endpoint(
     screenshot_paths = logs_df['screenshot'].dropna().unique().tolist()
     best_screenshot_path = select_best_screenshot(diary_content, screenshot_paths)
 
-<<<<<<< HEAD
     # ✅ 3️⃣ 감정 태그/키워드 생성
     from app.api.diary.prompt_diary import emotion_tag_chain
     emotion_result = emotion_tag_chain.invoke({"diary": diary_content})
@@ -275,10 +274,6 @@ async def save_diary_endpoint(
         emotion_tags, 
         emotion_keywords
     )
-=======
-    # 3️⃣ DB에 저장
-    save_diary_to_db(db, session_id, user_id, ingame_date, diary_content, best_screenshot_path)
->>>>>>> e6a5c7ea40377fd30a8a7b9b83e900b277d4f1b7
     
     # ✅ 파일명만 반환
     best_screenshot_filename = None
@@ -287,13 +282,9 @@ async def save_diary_endpoint(
 
     return {
         "message": "Diary saved successfully.",
-<<<<<<< HEAD
         "best_screenshot_filename": best_screenshot_filename,
         "emotion_tags": emotion_tags,
         "emotion_keywords": emotion_keywords
-=======
-        "best_screenshot_filename": best_screenshot_filename
->>>>>>> e6a5c7ea40377fd30a8a7b9b83e900b277d4f1b7
     }
 
 # ✅ FileResponse로 반환할 파일 기본 경로 설정
