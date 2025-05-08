@@ -210,8 +210,20 @@ async def generate_diary_endpoint(
 
     # 2️⃣ 로그 정보 가져오기
     logs_df = get_logs_by_user_and_date(db, session_id, user_id, ingame_date)
+
     if logs_df.empty:
+        print("⚠️ 로그가 존재하지 않습니다. 404 에러를 반환합니다.")
         raise HTTPException(status_code=404, detail="해당 날짜의 로그가 존재하지 않습니다.")
+
+    # # ✅ 'screenshot' 컬럼 존재 여부 확인
+    # if 'screenshot' not in logs_df.columns:
+    #     print("⚠️ 'screenshot' 컬럼이 DataFrame에 없습니다.")
+    # else:
+    #     print("✅ 'screenshot' 컬럼이 존재합니다.")
+    #     print("=== screenshot 컬럼 내용 ===")
+    #     print(logs_df['screenshot'].head())
+    #     print("=== 모든 데이터 ===")
+    #     print(logs_df.head())
 
     # 3️⃣ 다이어리 생성 및 대표 이미지 선택
     result_state = run_diary_generation(session_id, user_id, ingame_date, logs_df, mbti, db, save_to_db=False)
@@ -220,7 +232,7 @@ async def generate_diary_endpoint(
     best_screenshot_filename = None
     if result_state.get("best_screenshot_path"):
         best_screenshot_filename = Path(result_state["best_screenshot_path"]).name
-    
+
     # ✅ 최종 응답 생성
     response = format_diary_output(result_state)
     response["best_screenshot_filename"] = best_screenshot_filename
@@ -242,11 +254,27 @@ async def save_diary_endpoint(
 ):
     # 1️⃣ 로그 정보 가져오기
     logs_df = get_logs_by_user_and_date(db, session_id, user_id, ingame_date)
-    
+
+    # ✅ 컬럼이 없을 경우 강제로 생성
+    if 'screenshot' not in logs_df.columns:
+        print("⚠️ 'screenshot' 컬럼이 누락되어 강제로 생성합니다.")
+        logs_df['screenshot'] = ""
+
     # 2️⃣ 대표 이미지 다시 찾기
     from app.api.diary.screenshot_selector import select_best_screenshot
-    screenshot_paths = logs_df['screenshot'].dropna().unique().tolist()
-    best_screenshot_path = select_best_screenshot(diary_content, screenshot_paths)
+
+    try:
+        screenshot_paths = logs_df['screenshot'].dropna().unique().tolist()
+    except KeyError:
+        print("⚠️ 'screenshot' 컬럼이 존재하지 않아서 기본 이미지로 대체합니다.")
+        screenshot_paths = ["static/screenshot/default.png"]
+
+    # ✅ 기본 이미지 설정
+    if not screenshot_paths:
+        print("⚠️ 대표 이미지가 없어서 기본 이미지로 대체합니다.")
+        best_screenshot_path = "static/screenshot/default.png"
+    else:
+        best_screenshot_path = select_best_screenshot(diary_content, screenshot_paths)
 
     # ✅ 3️⃣ 감정 태그/키워드 생성
     from app.api.diary.prompt_diary import emotion_tag_chain

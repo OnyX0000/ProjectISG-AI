@@ -17,7 +17,7 @@ prompt_template = ChatPromptTemplate.from_template("""
 # 일지 내용
 
 # 오늘의 감정 기록:
-(시적인 감정 회고)
+(짧고 간결한 시적인 감정 회고)
 
 지침:
 1. 위 포맷을 꼭 유지하면서, 사용자 시점에서 활동 기반 감정적 일지를 작성해.
