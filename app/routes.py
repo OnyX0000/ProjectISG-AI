@@ -15,7 +15,7 @@ from app.api.mbti.logic import generate_question, judge_response
 from app.utils.mbti_helper import init_mbti_state, update_score, get_session, get_mbti_profile, finalize_mbti
 from app.models.models import UserLog, UserMBTI, Diary  
 from app.utils.db_helper import get_mbti_by_user_id
-from app.utils.log_helper import get_logs_by_user_and_date, convert_path_to_url
+from app.utils.log_helper import get_logs_by_user_and_date, convert_path_to_url, extract_date_only
 from app.api.diary.diary_generator import run_diary_generation, format_diary_output, save_diary_to_db
 from app.utils.image_helper import save_screenshot
 
@@ -236,6 +236,10 @@ async def generate_diary_endpoint(
     # ✅ 최종 응답 생성
     response = format_diary_output(result_state)
     response["best_screenshot_filename"] = best_screenshot_filename
+
+    if "ingame_datetime" in response:
+        # ingame_datetime을 YYYY.MM.DD 형식으로 변경
+        response["ingame_datetime"] = extract_date_only(response["ingame_datetime"])
 
     return response
 

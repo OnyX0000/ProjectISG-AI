@@ -44,9 +44,9 @@ class Diary(Base):
     emotion_keywords = Column(String, nullable=True)  
 
 # 모든 LLM 초기화는 이곳에서 관리
-llm_question = ChatOllama(model="gemma3:12b", temperature=0.5)
-llm_evaluator = ChatOllama(model="gemma3:12b", temperature=0.5)
-diary_llm = ChatOllama(model="gemma3:27b", temperature=0.2)
+llm_question = ChatOllama(model="gemma3:12b", temperature=0.7)
+llm_evaluator = ChatOllama(model="gemma3:12b", temperature=0.7)
+diary_llm = ChatOllama(model="gemma3:12b", temperature=0.7)
 
 # Ollama 기반 텍스트 임베딩
 embedding_model = OllamaEmbeddings(model="nomic-embed-text")
