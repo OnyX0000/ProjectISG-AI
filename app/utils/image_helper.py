@@ -26,7 +26,8 @@ def run_captioning(image_path: str) -> str:
 
 def save_screenshot(file: UploadFile, user_id: str, session_id: str) -> str:
     """
-    스크린샷 파일을 user_id 별로 구분된 폴더에 저장합니다.
+    스크린샷 파일을 screenshot 폴더에 저장합니다. 
+    클라이언트에서 전달된 파일명을 그대로 사용합니다.
     
     Args:
         file (UploadFile): 업로드된 파일 객체
@@ -36,13 +37,16 @@ def save_screenshot(file: UploadFile, user_id: str, session_id: str) -> str:
     Returns:
         str: 상대경로로 반환된 이미지 경로
     """
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    user_folder = os.path.join(UPLOAD_DIR, user_id)
-    os.makedirs(user_folder, exist_ok=True)
+    # static/screenshot 디렉토리 생성
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # 파일명 생성
-    filename = f"screenshot_{session_id}_{ts}.png"
-    file_path = os.path.join(user_folder, filename)
+    # 클라이언트에서 전달된 파일명 그대로 사용
+    filename = file.filename
+    file_path = os.path.join(UPLOAD_DIR, filename)
+
+    # 동일한 이름이 있을 경우 기존 파일 삭제
+    if os.path.exists(file_path):
+        os.remove(file_path)
 
     # 파일 저장
     with open(file_path, "wb") as f:

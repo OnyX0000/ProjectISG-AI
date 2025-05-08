@@ -29,7 +29,7 @@ def get_logs_by_user_and_date(db: Session, session_id: str, user_id: str, ingame
         "action_name": log.action_name,
         "detail": log.detail,
         "with": log.with_,
-        "screenshot": log.screenshot
+        "screenshot": log.screenshot if log.screenshot is not None else ""
     } for log in logs])
 
 def extract_date_only(ingame_datetime: str) -> str:
