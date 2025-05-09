@@ -348,10 +348,13 @@ async def get_all_diaries_endpoint(
         # 파일명만 추출
         screenshot_name = Path(diary.best_screenshot_path).name if diary.best_screenshot_path else None
 
+        # ✅ 날짜 형식 변경 (extract_date_only 사용)
+        formatted_date = extract_date_only(diary.ingame_datetime)
+
         # ✅ 파일명만 반환
         result["diaries"].append({
             "diary_id": diary.id,
-            "ingame_datetime": diary.ingame_datetime,
+            "ingame_datetime": formatted_date,
             "content": diary.content,
             "best_screenshot_filename": screenshot_name
         })
