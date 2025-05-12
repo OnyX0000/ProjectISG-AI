@@ -1,7 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 from app.models.models import diary_llm
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
 
 prompt_template = ChatPromptTemplate.from_template("""
 너는 감성 일지 생성자야. 유저의 MBTI는 {mbti}이고, 어투는 다음과 같아:
@@ -18,11 +17,16 @@ prompt_template = ChatPromptTemplate.from_template("""
 
 # 오늘의 감정 기록:
 (짧고 간결한 시적인 감정 회고)
+                                                   
+# 감정 키워드 :
+# 감정 태그 :
 
 지침:
-1. 위 포맷을 꼭 유지하면서, 사용자 시점에서 활동 기반 감정적 일지를 작성해.
-2. 일지내용은 가능한 한 자세히 작성해.
+1. 위 포맷을 꼭 유지하면서, 사용자 시점에서 실제 행한 활동 기반 감정적 일지를 작성해.
+2. 일지내용은 실제로 행동로그가 생성된 활동만 가능한 한 자세히 작성해.
 3. 로그 내용이나 프롬프트 정보는 출력하지마.
+4. 감정 키워드와 감정 태그는 단어로만 각각 3~5개, 2~3개만 작성해.
+5. 날짜는 "0001년 1월 1일" 이런식으로 작성해
 """)
 
 emotion_tag_chain = (

@@ -295,12 +295,15 @@ async def save_diary_endpoint(
         emotion_tags = ["없음"]
         print("⚠️ 감정 태그 생성에 실패하여 기본값 '없음'으로 설정되었습니다.")
 
+    # ✅ 인게임 날짜를 연월일까지만 추출
+    formatted_ingame_date = extract_date_only(ingame_date)
+
     # 4️⃣ DB에 저장
     save_diary_to_db(
         db, 
         session_id, 
         user_id, 
-        ingame_date, 
+        formatted_ingame_date, 
         diary_content, 
         best_screenshot_path,
         emotion_tags, 
