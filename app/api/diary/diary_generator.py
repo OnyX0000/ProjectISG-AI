@@ -2,12 +2,10 @@ from app.api.diary.graph import build_diary_graph, DiaryState
 from app.api.diary.prompt_diary import emotion_tag_chain
 from app.api.diary.screenshot_selector import select_best_screenshot
 from app.utils.log_helper import to_relative_screenshot_path
-from app.models.models import Diary
-from sqlalchemy.orm import Session
+from app.utils.db_helper import save_diary_to_mongo, get_diary_from_mongo
 import pandas as pd
 
-def save_diary_to_db(
-    db: Session,
+def save_diary_to_mongo_db(
     session_id: str,
     user_id: str,
     date: str,
@@ -16,41 +14,22 @@ def save_diary_to_db(
     emotion_tags: list[str] = None,
     emotion_keywords: list[str] = None
 ):
-    # ✅ None 체크 및 경로 수정
-    if best_screenshot_path and best_screenshot_path.startswith("None"):
-        best_screenshot_path = best_screenshot_path.replace("None", "")
-    
-    # ✅ 기본값 설정: None일 경우에도 "없음"으로 명시
-    emotion_tags_str = ",".join(emotion_tags) if emotion_tags else None
-    emotion_keywords_str = ",".join(emotion_keywords) if emotion_keywords else None
-
-    # # 🔍 디버그 로그 추가
-    # print("📝 Saving to DB")
-    # print(f"Session ID: {session_id}")
-    # print(f"User ID: {user_id}")
-    # print(f"Ingame Date: {date}")
-    # print(f"Content: {content}")
-    # print(f"Best Screenshot Path: {best_screenshot_path}")
-    # print(f"Emotion Tags: {emotion_tags_str}")
-    # print(f"Emotion Keywords: {emotion_keywords_str}")
-
-    # ✅ DB 객체 생성
+    """
+    MongoDB에 Diary를 저장하는 함수
+    """
     try:
-        diary = Diary(
+        save_diary_to_mongo(
             session_id=session_id,
             user_id=user_id,
-            ingame_datetime=date,
+            date=date,
             content=content,
-            best_screenshot_path=best_screenshot_path if best_screenshot_path else None,
-            emotion_tags=emotion_tags_str if emotion_tags_str else None,
-            emotion_keywords=emotion_keywords_str if emotion_keywords_str else None
+            emotion_tags=emotion_tags,
+            emotion_keywords=emotion_keywords,
+            screenshot_path=best_screenshot_path
         )
-        db.add(diary)
-        db.commit()
-        print("✅ DB Commit 성공")
+        print("✅ MongoDB에 저장 성공")
     except Exception as e:
-        print(f"❌ DB Commit 실패: {e}")
-        db.rollback()
+        print(f"❌ MongoDB 저장 실패: {e}")
 
 def run_diary_generation(
     session_id: str,
@@ -58,7 +37,6 @@ def run_diary_generation(
     date: str,
     group: pd.DataFrame,
     mbti: str,
-    db: Session,
     save_to_db: bool = True
 ):
     graph = build_diary_graph()
@@ -73,6 +51,12 @@ def run_diary_generation(
     state = graph.invoke(input_data)
     diary_content = state["diary"]
 
+    if "<think>" in diary_content and "</think>" in diary_content:
+        start_idx = diary_content.index("<think>")
+        end_idx = diary_content.index("</think>") + len("</think>")
+        print(f"🛠️ <think> 태그 발견: {diary_content[start_idx:end_idx]} → 삭제 처리합니다.")
+        diary_content = diary_content[:start_idx] + diary_content[end_idx:]
+
     # 감정 키워드/태그 별도 체인 호출
     emotion_result = emotion_tag_chain.invoke({"diary": diary_content})
     
@@ -82,8 +66,14 @@ def run_diary_generation(
 
     if not emotion_keywords:
         print("⚠️ 감정 키워드 생성에 실패했습니다.")
+    else:
+        print(emotion_keywords)
+        
     if not emotion_tags:
         print("⚠️ 감정 태그 생성에 실패했습니다.")
+    else:
+        print(emotion_tags)
+
 
     # 스크린샷 경로 추출
     screenshot_paths = group['screenshot'].dropna().unique().tolist()
@@ -92,13 +82,15 @@ def run_diary_generation(
     # 대표 이미지 선택
     best_screenshot_path = select_best_screenshot(diary_content, screenshot_paths)
 
-    # 저장
+    # ✅ 날짜 포맷 수정 (시간 제거)
+    formatted_date = date.split('-')[0] if '-' in date else date
+
+    # ✅ DB에 저장
     if save_to_db:
-        save_diary_to_db(
-            db=db,
+        save_diary_to_mongo_db(
             session_id=session_id,
             user_id=user_id,
-            date=date,
+            date=formatted_date,  # ✅ 날짜만 들어가도록 수정됨
             content=diary_content,
             best_screenshot_path=best_screenshot_path,
             emotion_tags=emotion_tags,
@@ -107,7 +99,7 @@ def run_diary_generation(
 
     return {
         "user_id": user_id,
-        "date": date,
+        "date": formatted_date,
         "mbti": mbti,
         "diary": diary_content,
         "emotion_tags": emotion_tags,
@@ -123,10 +115,16 @@ def format_diary_output(state: DiaryState) -> dict:
         "mbti": state["mbti"],
         "emotion_tags": state["emotion_tags"],
         "emotion_keywords": state["emotion_keywords"],
-        "diary": state["diary"]
+        "diary": state["diary"],  
+        "best_screenshot_filename": state.get("best_screenshot_path", "default.png"),  
+        "formatted_date": state.get("date") 
     }
 
+
 def regenerate_emotion_info(diary_text: str) -> dict:
+    """
+    일지 내용을 바탕으로 감정 키워드와 태그를 재생성합니다.
+    """
     result = emotion_tag_chain.invoke({"diary": diary_text})
     return {
         "keywords": result["keywords"],

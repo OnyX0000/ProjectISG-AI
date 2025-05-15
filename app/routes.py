@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, B
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from uuid import uuid4
+from datetime import datetime
 from sqlalchemy.orm import Session as DbSession
-from app.core.database import SessionLocal
+from app.core.database import get_pg_session, get_mongo_collection
 from app.utils.action_enum import ActionType, ActionName
 from typing import List, Optional
 from datetime import datetime
@@ -13,10 +14,15 @@ import os
 import shutil
 from app.api.mbti.logic import generate_question, judge_response 
 from app.utils.mbti_helper import init_mbti_state, update_score, get_session, get_mbti_profile, finalize_mbti
-from app.models.models import UserLog, UserMBTI, Diary  
-from app.utils.db_helper import get_mbti_by_user_id
+from app.models.models import UserLog, UserMBTI
+from app.utils.db_helper import (
+    get_mbti_by_user_id,
+    get_game_logs_by_user_id,
+    save_diary_to_mongo,
+    get_diary_from_mongo
+)
 from app.utils.log_helper import get_logs_by_user_and_date, convert_path_to_url, extract_date_only
-from app.api.diary.diary_generator import run_diary_generation, format_diary_output, save_diary_to_db
+from app.api.diary.diary_generator import run_diary_generation, format_diary_output
 from app.utils.image_helper import save_screenshot
 
 # Routers
@@ -27,8 +33,9 @@ log_router = APIRouter()
 UPLOAD_DIR = "static/screenshot"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# PostgreSQL DB 세션 생성 함수
 def get_db():
-    db = SessionLocal()
+    db = get_pg_session()
     try:
         yield db
     finally:
@@ -67,6 +74,17 @@ async def upload_log_with_screenshot(
     if file:
         screenshot_path = save_screenshot(file, user_id, session_id)
 
+    # ✅ 날짜 형식 변환
+    try:
+        timestamp = datetime.strptime(timestamp, "%Y.%m.%d-%H.%M.%S")
+        ingame_datetime = datetime.strptime(ingame_datetime, "%Y.%m.%d-%H.%M.%S")
+    except ValueError as e:
+        return {
+            "message": "날짜 형식이 잘못되었습니다. 'YYYY.MM.DD-HH.MM.SS' 형식을 맞춰주세요.",
+            "error": str(e)
+        }
+
+    # ✅ SQLAlchemy 모델 생성
     log = UserLog(
         session_id=session_id,
         user_id=user_id,
@@ -79,8 +97,14 @@ async def upload_log_with_screenshot(
         with_=with_,
         screenshot=screenshot_path
     )
-    db.add(log)
-    db.commit()
+
+    # ✅ DB 저장
+    try:
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        return {"message": "DB 저장 중 오류가 발생했습니다.", "error": str(e)}
 
     return {
         "message": "로그 저장 완료",
@@ -104,7 +128,7 @@ async def get_all_logs(db: DbSession = Depends(get_db)):
         "action_type": log.action_type,
         "action_name": log.action_name,
         "detail": log.detail,
-        "with": log.with_,
+        "with_": log.with_,
         "screenshot": log.screenshot
     } for log in logs]
     return {"logs": result}
@@ -203,45 +227,57 @@ async def generate_diary_endpoint(
     ingame_date: str = Body(...),
     db: DbSession = Depends(get_db)
 ):
+    """
+    PostgreSQL에서 로그 정보를 가져오고 Diary를 생성한 뒤, 클라이언트에 반환합니다.
+    DB에 저장하지 않습니다.
+    """
+
     # 1️⃣ MBTI 정보 가져오기
     mbti = get_mbti_by_user_id(db, user_id)
     if not mbti:
+        print("❌ [ERROR] MBTI 정보가 없습니다.")
         raise HTTPException(status_code=404, detail="해당 user_id의 MBTI 정보를 찾을 수 없습니다.")
 
-    # 2️⃣ 로그 정보 가져오기
+    # 2️⃣ 로그 정보 가져오기 (PostgreSQL)
     logs_df = get_logs_by_user_and_date(db, session_id, user_id, ingame_date)
 
     if logs_df.empty:
-        print("⚠️ 로그가 존재하지 않습니다. 404 에러를 반환합니다.")
+        print("⚠️ [ERROR] 로그가 존재하지 않습니다. 404 에러를 반환합니다.")
         raise HTTPException(status_code=404, detail="해당 날짜의 로그가 존재하지 않습니다.")
 
-    # # ✅ 'screenshot' 컬럼 존재 여부 확인
-    # if 'screenshot' not in logs_df.columns:
-    #     print("⚠️ 'screenshot' 컬럼이 DataFrame에 없습니다.")
-    # else:
-    #     print("✅ 'screenshot' 컬럼이 존재합니다.")
-    #     print("=== screenshot 컬럼 내용 ===")
-    #     print(logs_df['screenshot'].head())
-    #     print("=== 모든 데이터 ===")
-    #     print(logs_df.head())
+    # 3️⃣ 일지 생성
+    print("📝 [DEBUG] 일지 생성 중...")
+    result_state = run_diary_generation(
+        session_id=session_id,
+        user_id=user_id,
+        date=ingame_date,
+        group=logs_df,
+        mbti=mbti,
+        save_to_db=False
+    )
 
-    # 3️⃣ 다이어리 생성 및 대표 이미지 선택
-    result_state = run_diary_generation(session_id, user_id, ingame_date, logs_df, mbti, db, save_to_db=False)
-    
-    # ✅ 대표 이미지 파일명만 추출
-    best_screenshot_filename = None
-    if result_state.get("best_screenshot_path"):
-        best_screenshot_filename = Path(result_state["best_screenshot_path"]).name
+    # ✅ 대표 이미지 찾기
+    from app.api.diary.screenshot_selector import select_best_screenshot
+    screenshot_paths = logs_df['screenshot'].dropna().unique().tolist()
+    best_screenshot_path = select_best_screenshot(result_state["diary"], screenshot_paths)
 
-    # ✅ 최종 응답 생성
-    response = format_diary_output(result_state)
-    response["best_screenshot_filename"] = best_screenshot_filename
+    # ✅ 날짜 포맷 변환
+    formatted_ingame_date = extract_date_only(ingame_date)
 
-    if "ingame_datetime" in response:
-        # ingame_datetime을 YYYY.MM.DD 형식으로 변경
-        response["ingame_datetime"] = extract_date_only(response["ingame_datetime"])
+    # ✅ 파일명만 반환
+    best_screenshot_filename = (
+        Path(best_screenshot_path).name if best_screenshot_path else "default.png"
+    )
 
-    return response
+    # ✅ 최종 결과 반환 (format_diary_output 사용)
+    formatted_response = format_diary_output(result_state)
+    formatted_response.update({
+        "message": "Diary generated successfully.",
+        "best_screenshot_filename": best_screenshot_filename,
+        "formatted_date": formatted_ingame_date
+    })
+
+    return formatted_response
 
 @diary_router.post("/regenerate_emotion")
 async def regenerate_emotion(diary_text: str):
@@ -254,9 +290,12 @@ async def save_diary_endpoint(
     user_id: str = Body(...),
     ingame_date: str = Body(...),
     diary_content: str = Body(...),
-    db: DbSession = Depends(get_db)
+    db: DbSession = Depends(get_db)  # ✅ PostgreSQL 세션 유지
 ):
-    # 1️⃣ 로그 정보 가져오기
+    """
+    로그를 조회하여 대표 이미지를 선택하고 MongoDB에 일지 저장
+    """
+    # 1️⃣ PostgreSQL에서 로그 정보 가져오기
     logs_df = get_logs_by_user_and_date(db, session_id, user_id, ingame_date)
 
     # ✅ 컬럼이 없을 경우 강제로 생성
@@ -298,16 +337,16 @@ async def save_diary_endpoint(
     # ✅ 인게임 날짜를 연월일까지만 추출
     formatted_ingame_date = extract_date_only(ingame_date)
 
-    # 4️⃣ DB에 저장
-    save_diary_to_db(
-        db, 
-        session_id, 
-        user_id, 
-        formatted_ingame_date, 
-        diary_content, 
-        best_screenshot_path,
-        emotion_tags, 
-        emotion_keywords
+    # ✅ 4️⃣ MongoDB에 저장
+    from app.utils.db_helper import save_diary_to_mongo
+    save_diary_to_mongo(
+        session_id=session_id,
+        user_id=user_id,
+        date=formatted_ingame_date,
+        content=diary_content,
+        emotion_tags=emotion_tags,
+        emotion_keywords=emotion_keywords,
+        screenshot_path=best_screenshot_path
     )
     
     # ✅ 파일명만 반환
@@ -328,15 +367,21 @@ BASE_IMAGE_PATH = Path("static/screenshot")
 @diary_router.post("/get_all_diaries")
 async def get_all_diaries_endpoint(
     user_id: str = Body(...),
-    session_id: str = Body(...),
-    db: DbSession = Depends(get_db)
+    session_id: str = Body(...)
 ):
-    # DB에서 일지 조회
-    diaries = db.query(Diary).filter(
-        Diary.user_id == user_id,
-        Diary.session_id == session_id
-    ).all()
+    """
+    MongoDB에서 특정 user_id와 session_id에 해당하는 모든 일지를 조회합니다.
+    """
+    # ✅ MongoDB 컬렉션 가져오기
+    diary_collection = get_mongo_collection("diary")
 
+    # ✅ MongoDB 쿼리 실행 (모든 일지 조회)
+    diaries = list(diary_collection.find({
+        "user_id": user_id,
+        "session_id": session_id
+    }))
+
+    # ✅ 결과가 없으면 404 에러
     if not diaries:
         raise HTTPException(status_code=404, detail="해당 user_id와 session_id 조합으로 저장된 일지가 없습니다.")
 
@@ -347,18 +392,15 @@ async def get_all_diaries_endpoint(
         "diaries": []
     }
 
+    # ✅ Diary 문서 순회하며 결과 생성
     for diary in diaries:
-        # 파일명만 추출
-        screenshot_name = Path(diary.best_screenshot_path).name if diary.best_screenshot_path else None
-
-        # ✅ 날짜 형식 변경 (extract_date_only 사용)
-        formatted_date = extract_date_only(diary.ingame_datetime)
-
-        # ✅ 파일명만 반환
+        screenshot_name = Path(diary.get("screenshot_path")).name if diary.get("screenshot_path") else None
+        # ✅ 날짜 포맷 변환
+        formatted_date = extract_date_only(diary.get("date"))
         result["diaries"].append({
-            "diary_id": diary.id,
+            "diary_id": str(diary.get("_id")),  # ObjectId를 문자열로 변환
             "ingame_datetime": formatted_date,
-            "content": diary.content,
+            "content": diary.get("content"),
             "best_screenshot_filename": screenshot_name
         })
 
@@ -376,17 +418,17 @@ async def render_image(image_name: str):
     return FileResponse(file_path, media_type='image/png', headers=headers)
 
 @log_router.delete("/diary/delete")
-async def delete_diary(session_id: str, user_id: str, db: DbSession = Depends(get_db)):
+async def delete_diary(session_id: str, user_id: str):
     """
-    특정 session_id와 user_id에 해당하는 Diary 데이터를 삭제합니다.
+    특정 session_id와 user_id에 해당하는 Diary 데이터를 MongoDB에서 삭제합니다.
     """
-    diaries = db.query(Diary).filter(Diary.session_id == session_id, Diary.user_id == user_id).all()
+    diary_collection = get_mongo_collection("diary")
+    result = diary_collection.delete_many({
+        "session_id": str(session_id),
+        "user_id": str(user_id)
+    })
     
-    if not diaries:
+    if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="삭제할 Diary 데이터가 존재하지 않습니다.")
     
-    for diary in diaries:
-        db.delete(diary)
-    
-    db.commit()
-    return {"message": f"{len(diaries)}개의 일지가 삭제되었습니다."}
+    return {"message": f"{result.deleted_count}개의 일지가 삭제되었습니다."}

@@ -9,7 +9,6 @@ from app.models.models import diary_llm as llm
 from app.api.diary.rag import rag_chain
 from app.api.diary.prompt_diary import prompt_template, emotion_tag_chain
 
-
 class DiaryState(TypedDict, total=False):
     user_id: str
     date: str
@@ -21,15 +20,16 @@ class DiaryState(TypedDict, total=False):
     emotion_tags: list[str]
     emotion_keywords: list[str]
 
-emotion_map = {
-    "#고요함": ["안정", "차분"],
-    "#성취감": ["상승", "보람"],
-    "#그리움": ["회상", "감정 자극"],
-    "#연결감": ["교류", "따뜻함"],
-    "#외로움": ["고립", "저하"],
-    "#따뜻함": ["치유", "회복"],
-    "#불안정": ["혼란", "실패"],
-    "#몰입": ["집중", "루틴"]
+emotion_list = ["고요함", "성취감", "그리움", "연결감", "불안정", "몰입"]
+
+# ✅ 감정 키워드에 따른 연관 해시태그
+emotion_tag_mapping = {
+    "고요함": ["#평온", "#명상", "#안정", "#조용한시간"],
+    "성취감": ["#성장", "#목표달성", "#보람", "#자부심"],
+    "그리움": ["#추억", "#회상", "#기억", "#감정"],
+    "연결감": ["#연대", "#따뜻함", "#교감", "#소속감"],
+    "불안정": ["#불안", "#혼란", "#불확실", "#고민"],
+    "몰입": ["#집중", "#몰두", "#시간가속", "#경험"]
 }
 
 mbti_style_cache = {}
@@ -37,12 +37,12 @@ mbti_style_cache = {}
 def prepare_log_node(state: DiaryState) -> DiaryState:
     sorted_group = state['group'].sort_values(by="timestamp")
     log_text = "\n".join([
-        f"[{row['ingame_datetime']}] {row['action_type']} - {row['action_name']} @ {row['location']} | detail: {row['detail']}"
+        f"[{row['ingame_datetime'].strftime('%Y-%m-%d')}] {row['action_type']} - {row['action_name']} @ {row['location']} | detail: {row['detail']}"
         + (f" (with: {row['with']})" if pd.notna(row['with']) and row['with'] else "")
         for _, row in sorted_group.iterrows()
     ])
     state['log_text'] = log_text
-    state['date'] = sorted_group.iloc[0]['ingame_datetime'].split(' ')[0]
+    state['date'] = sorted_group.iloc[0]['ingame_datetime'].strftime('%Y-%m-%d')
     return state
 
 def retrieve_mbti_style_node(state: DiaryState) -> DiaryState:
@@ -56,24 +56,35 @@ def retrieve_mbti_style_node(state: DiaryState) -> DiaryState:
     return state
 
 def assign_emotion_node(state: DiaryState) -> DiaryState:
-    selected = random.sample(list(emotion_map.items()), 3)
-    state['emotion_tags'] = [tag for tag, _ in selected[:2]]
-    state['emotion_keywords'] = [kw for _, kws in selected[:2] for kw in kws[:1]]
+    # ✅ 감정 키워드를 무작위로 하나만 선택
+    selected_emotion = random.choice(emotion_list)
+    state['emotion_keywords'] = [selected_emotion]
+
+    # ✅ 감정 키워드에 맞는 태그를 랜덤으로 2개 생성
+    possible_tags = emotion_tag_mapping.get(selected_emotion, ["#감정", "#일상"])
+    state['emotion_tags'] = random.sample(possible_tags, 2)
+    
     return state
 
 def generate_diary_node_factory(mbti: str):
     chain = prompt_template | llm | StrOutputParser()
 
     def node(state: DiaryState) -> DiaryState:
-        diary = chain.invoke({
-            "user_id": state["user_id"],
-            "date": state["date"],
-            "log_text": state["log_text"],
-            "mbti": state["mbti"],
-            "style_context": state["style_context"],
-            "emotion_tags": ", ".join(state["emotion_tags"]),
-            "emotion_keywords": ", ".join(state["emotion_keywords"])
-        })
+        # 🛠️ LLM 호출
+        try:
+            diary = chain.invoke({
+                "user_id": state["user_id"],
+                "date": state["date"],
+                "log_text": state["log_text"],
+                "mbti": state["mbti"],
+                "style_context": state["style_context"],
+                "emotion_tags": ", ".join(state["emotion_tags"]),
+                "emotion_keywords": ", ".join(state["emotion_keywords"])
+            })
+        except Exception as e:
+            print(f"❌ [ERROR] LLM 호출 중 오류 발생: {e}")
+            diary = "Diary Content"
+        
         state['diary'] = diary
         return state
 

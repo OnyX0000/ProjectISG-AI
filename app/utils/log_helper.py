@@ -34,15 +34,16 @@ def get_logs_by_user_and_date(db: Session, session_id: str, user_id: str, ingame
     # ✅ 날짜 포맷 변환 (extract_date_only 함수 활용)
     formatted_date = extract_date_only(ingame_date)
 
-    # ✅ 쿼리 실행
+    # ✅ 쿼리 실행 (to_char 사용)
     logs = db.query(UserLog).filter(
         UserLog.session_id == session_id,
         UserLog.user_id == user_id,
-        func.substr(UserLog.ingame_datetime, 1, 10) == formatted_date
+        func.to_char(UserLog.ingame_datetime, 'YYYY.MM.DD') == formatted_date
     ).order_by(asc(UserLog.ingame_datetime)).all()
 
     # ✅ 조회 결과 확인
     if not logs:
+        print("❌ 조회된 로그가 없습니다.")
         return pd.DataFrame()
 
     # ✅ DataFrame 생성
@@ -57,7 +58,7 @@ def get_logs_by_user_and_date(db: Session, session_id: str, user_id: str, ingame
         "with": log.with_,
         "screenshot": log.screenshot if log.screenshot else ""
     } for log in logs])
-
+    
     return logs_df
 
 def to_relative_screenshot_path(full_path: str) -> str:

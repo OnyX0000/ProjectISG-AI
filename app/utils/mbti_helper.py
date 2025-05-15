@@ -7,7 +7,6 @@ from app.models.models import UserMBTI
 # MBTI 프로필이 저장된 JSON 파일 경로
 MBTI_PROFILE_PATH = os.path.join("static", "JSON", "mbti_profile.json")
 
-
 # MBTI 프로필 JSON 로드
 def get_mbti_profile(mbti_type: str) -> dict:
     with open(MBTI_PROFILE_PATH, "r", encoding="utf-8") as f:
