@@ -42,15 +42,32 @@ judge_chain = judge_prompt | llm_evaluator | StrOutputParser()
 
 # 질문 생성 함수
 def generate_question(history: str, remaining_dimensions: str) -> tuple[str, str]:
+    if not remaining_dimensions:
+        print("⚠️ [WARN] 남은 Dimension이 없습니다. 기본값으로 대체합니다.")
+        remaining_dimensions = "I-E, S-N, T-F, J-P"
+    
     result = question_chain.invoke({
         "history": history,
         "remaining_dimensions": remaining_dimensions
     })
     lines = result.strip().splitlines()
-    question_line = next(line for line in lines if line.lower().startswith("질문"))
-    dimension_line = next(line for line in lines if line.lower().startswith("dimension"))
+    
+    # ✅ 올바른 형식의 질문이 생성되었는지 확인
+    question_line = next((line for line in lines if line.lower().startswith("질문")), None)
+    dimension_line = next((line for line in lines if line.lower().startswith("dimension")), None)
+    
+    if not question_line or not dimension_line:
+        print("⚠️ [WARN] 질문 생성 실패. 기본값으로 대체합니다.")
+        return "기본 질문: 당신은 혼자 있을 때 에너지를 얻나요?", "I-E"
+
     question = question_line.split(":", 1)[1].strip()
     dimension = dimension_line.split(":", 1)[1].strip()
+
+    # ✅ 만약 dimension이 비어 있다면 기본값으로 대체
+    if not dimension or dimension not in ["I-E", "S-N", "T-F", "J-P"]:
+        print(f"⚠️ [WARN] Dimension이 유효하지 않습니다. 기본값으로 대체합니다. (dimension={dimension})")
+        dimension = "I-E"
+    
     return question, dimension
 
 # 응답 평가 함수

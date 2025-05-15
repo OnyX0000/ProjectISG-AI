@@ -1,7 +1,6 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, ForeignKey
-from langchain_community.chat_models import ChatOllama
-from langchain.embeddings import OllamaEmbeddings
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 from transformers import BlipProcessor, BlipForConditionalGeneration
 
 Base = declarative_base()
@@ -47,15 +46,15 @@ class Diary(Base):
 # 모든 LLM 초기화는 이곳에서 관리
 llm_question = ChatOllama(model="gemma3:12b", temperature=0.7)
 llm_evaluator = ChatOllama(model="gemma3:12b", temperature=0.7)
-diary_llm = ChatOllama(model="gemma3:27b", temperature=1.0)
-emo_llm = ChatOllama(model="gemma3:27b", temperature=0.2)
+diary_llm = ChatOllama(model="gemma3:12b", temperature=1.0)
+emo_llm = ChatOllama(model="gemma3:12b", temperature=0.2)
 
 # Ollama 기반 텍스트 임베딩
 embedding_model = OllamaEmbeddings(model="nomic-embed-text")
 
 # 이미지 처리 관련 모델
 # 모델 및 프로세서 로드 (최초 1회)
-image_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+image_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base", use_fast=True)
 caption_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
 
 __all__ = ["llm_question", "llm_evaluator"]

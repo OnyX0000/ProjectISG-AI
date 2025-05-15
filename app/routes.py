@@ -13,7 +13,7 @@ import pandas as pd
 import os
 import shutil
 from app.api.mbti.logic import generate_question, judge_response 
-from app.utils.mbti_helper import init_mbti_state, update_score, get_session, get_mbti_profile, finalize_mbti
+from app.utils.mbti_helper import init_mbti_state, update_score, get_session, update_session, get_mbti_profile, finalize_mbti
 from app.models.models import UserLog, UserMBTI
 from app.utils.db_helper import (
     get_mbti_by_user_id,
@@ -22,8 +22,10 @@ from app.utils.db_helper import (
     get_diary_from_mongo
 )
 from app.utils.log_helper import get_logs_by_user_and_date, convert_path_to_url, extract_date_only
-from app.api.diary.diary_generator import run_diary_generation, format_diary_output
+from app.api.diary.diary_generator import run_diary_generation, format_diary_output, regenerate_emotion_info
 from app.utils.image_helper import save_screenshot
+from app.api.diary.screenshot_selector import select_best_screenshot
+from app.api.diary.prompt_diary import emotion_tag_chain
 
 # Routers
 diary_router = APIRouter()
@@ -158,48 +160,68 @@ class MBTIAskRequest(BaseModel):
 
 @mbti_router.post("/ask")
 async def ask(input: MBTIAskRequest, db: DbSession = Depends(get_db)):
-    session_state = get_session(input.user_id)
-    if input.session_id:
-        session_state["session_id"] = input.session_id
+    """
+    사용자별 세션에 질문을 생성하여 반환합니다.
+    """
+    session_state = get_session(input.user_id, input.session_id, db)
+
+    # 이미 완료된 상태라면 반환
     if session_state.get("completed", False):
-        return {"message": "이 사용자는 이미 MBTI 테스트를 완료했습니다.", "completed": True}
-    if session_state["question_count"] >= 5:
-        mbti = finalize_mbti(input.user_id, session_state, db)
-        return {"message": f"MBTI 테스트가 완료되었습니다. 결과: {mbti}", "completed": True}
+        return {"message": "이미 MBTI 테스트가 완료되었습니다.", "completed": True}
+
+    # Dimension 생성
     history = "\n".join(session_state["conversation_history"])
     remain = [d for d in ["I-E", "S-N", "T-F", "J-P"] if d not in session_state["asked_dimensions"]]
     q, dim = generate_question(history, ", ".join(remain))
+
+    # ✅ 만약 dimension이 비어 있거나 유효하지 않다면 기본값으로 대체
+    if not dim or dim not in ["I-E", "S-N", "T-F", "J-P"]:
+        print(f"⚠️ [WARN] Dimension이 유효하지 않음. 기본값 'I-E'로 대체합니다.")
+        dim = "I-E"
+
     session_state["current_question"] = q
     session_state["current_dimension"] = dim
+    update_session(input.user_id, input.session_id, session_state, db)
+
     return {"question": q, "dimension": dim, "completed": False}
 
 class MBTIAnswerRequest(BaseModel):
     user_id: str
+    session_id: str
     response: str
 
 @mbti_router.post("/answer")
 async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
-    session_state = get_session(input.user_id)
+    """
+    사용자 응답을 저장하고 분석하여 세션에 반영합니다.
+    """
+    session_state = get_session(input.user_id, input.session_id, db)
     if session_state.get("completed", False):
-        return {"message": "이미 MBTI 테스트를 완료했습니다.", "completed": True}
+        return {"message": "이미 MBTI 테스트가 완료되었습니다.", "completed": True}
+
+    # ✅ List를 Set으로 변환 후 추가 (중복 방지)
+    current_dimension = session_state["current_dimension"]
+    asked_set = set(session_state["asked_dimensions"])
+    asked_set.add(current_dimension)
+    session_state["asked_dimensions"] = list(asked_set)  
+
     session_state["conversation_history"].append(
-        f"Q: {session_state['current_question']}\nA: {input.response}")
+        f"Q: {session_state['current_question']}\nA: {input.response}"
+    )
     session_state["current_response"] = input.response
     session_state["dimension_counts"][session_state["current_dimension"]] += 1
-    session_state["asked_dimensions"].add(session_state["current_dimension"])
+
     judged = judge_response(input.response, session_state["current_dimension"])
     update_score(session_state, judged)
+
+    # ✅ 5회 QA가 끝나면 자동으로 메모리 릴리스 및 DB 저장
     session_state["question_count"] += 1
+    update_session(input.user_id, input.session_id, session_state, db)  # ✅ db 전달
+
     if session_state["question_count"] >= 5:
-        mbti_type = finalize_mbti(input.user_id, session_state, db)
-        return {
-            "message": "MBTI 테스트가 완료되었습니다.",
-            "mbti": mbti_type,
-            "name": session_state["mbti_name"],
-            "summary": session_state["mbti_summary"],
-            "content": session_state["mbti_content"],
-            "completed": True
-        }
+        print(f"✅ [INFO] ({input.user_id}, {input.session_id})의 세션 종료 및 메모리 릴리스")
+        return {"message": "MBTI 테스트가 완료되었습니다. 세션이 종료되었습니다.", "completed": True}
+
     return {"message": "응답이 저장되었습니다. 다음 질문을 요청하세요.", "judged": judged, "completed": False}
 
 @mbti_router.get("/result/{user_id}")
@@ -257,7 +279,6 @@ async def generate_diary_endpoint(
     )
 
     # ✅ 대표 이미지 찾기
-    from app.api.diary.screenshot_selector import select_best_screenshot
     screenshot_paths = logs_df['screenshot'].dropna().unique().tolist()
     best_screenshot_path = select_best_screenshot(result_state["diary"], screenshot_paths)
 
@@ -281,7 +302,6 @@ async def generate_diary_endpoint(
 
 @diary_router.post("/regenerate_emotion")
 async def regenerate_emotion(diary_text: str):
-    from app.api.diary.diary_generator import regenerate_emotion_info
     return regenerate_emotion_info(diary_text)
 
 @diary_router.post("/save_diary")
@@ -304,8 +324,6 @@ async def save_diary_endpoint(
         logs_df['screenshot'] = ""
 
     # 2️⃣ 대표 이미지 다시 찾기
-    from app.api.diary.screenshot_selector import select_best_screenshot
-
     try:
         screenshot_paths = logs_df['screenshot'].dropna().unique().tolist()
     except KeyError:
@@ -320,7 +338,6 @@ async def save_diary_endpoint(
         best_screenshot_path = select_best_screenshot(diary_content, screenshot_paths)
 
     # ✅ 3️⃣ 감정 태그/키워드 생성
-    from app.api.diary.prompt_diary import emotion_tag_chain
     emotion_result = emotion_tag_chain.invoke({"diary": diary_content})
     
     emotion_keywords = emotion_result.get("keywords", [])

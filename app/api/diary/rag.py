@@ -1,6 +1,6 @@
 import os
 from langchain.chains import RetrievalQA
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import TextLoader
 from app.models.models import diary_llm, embedding_model
 
