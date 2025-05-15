@@ -163,7 +163,7 @@ async def ask(input: MBTIAskRequest, db: DbSession = Depends(get_db)):
         session_state["session_id"] = input.session_id
     if session_state.get("completed", False):
         return {"message": "이 사용자는 이미 MBTI 테스트를 완료했습니다.", "completed": True}
-    if session_state["question_count"] >= 10:
+    if session_state["question_count"] >= 5:
         mbti = finalize_mbti(input.user_id, session_state, db)
         return {"message": f"MBTI 테스트가 완료되었습니다. 결과: {mbti}", "completed": True}
     history = "\n".join(session_state["conversation_history"])
@@ -190,7 +190,7 @@ async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
     judged = judge_response(input.response, session_state["current_dimension"])
     update_score(session_state, judged)
     session_state["question_count"] += 1
-    if session_state["question_count"] >= 10:
+    if session_state["question_count"] >= 5:
         mbti_type = finalize_mbti(input.user_id, session_state, db)
         return {
             "message": "MBTI 테스트가 완료되었습니다.",
@@ -205,7 +205,7 @@ async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
 @mbti_router.get("/result/{user_id}")
 async def get_final_mbti(user_id: str):
     session_state = get_session(user_id)
-    if session_state["question_count"] < 10:
+    if session_state["question_count"] < 5:
         raise HTTPException(status_code=400, detail="아직 질문이 완료되지 않았습니다.")
     scores = session_state["dimension_scores"]
     mbti = ""
