@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from uuid import uuid4
@@ -224,23 +224,37 @@ async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
 
     return {"message": "응답이 저장되었습니다. 다음 질문을 요청하세요.", "judged": judged, "completed": False}
 
-@mbti_router.get("/result/{user_id}")
-async def get_final_mbti(user_id: str):
-    session_state = get_session(user_id)
-    if session_state["question_count"] < 5:
-        raise HTTPException(status_code=400, detail="아직 질문이 완료되지 않았습니다.")
-    scores = session_state["dimension_scores"]
-    mbti = ""
-    mbti += "I" if scores["I-E"] <= 0 else "E"
-    mbti += "S" if scores["S-N"] <= 0 else "N"
-    mbti += "T" if scores["T-F"] <= 0 else "F"
-    mbti += "J" if scores["J-P"] <= 0 else "P"
-    return {
-        "mbti": mbti,
-        "dimension_scores": scores,
-        "conversation": session_state["conversation_history"],
-        "match_accuracy": f"{sum(session_state['question_dimension_match'])} / {len(session_state['question_dimension_match'])}"
+@mbti_router.get("/users")
+async def get_users(limit: int = Query(default=3, description="조회할 사용자 수"), db: DbSession = Depends(get_db)):
+    """
+    사용자의 MBTI 정보를 지정된 개수만큼 조회하고, 전체 행 개수도 함께 반환합니다.
+    """
+    # ✅ 전체 행 개수 조회
+    total_count = db.query(UserMBTI).count()
+
+    if total_count == 0:
+        raise HTTPException(status_code=404, detail="데이터가 존재하지 않습니다.")
+    
+    # ✅ 지정된 개수만큼 조회
+    users = db.query(UserMBTI).limit(limit).all()
+
+    # ✅ 결과 포맷
+    result = {
+        "total_count": total_count,
+        "users": [
+            {
+                "user_id": user.user_id,
+                "session_id": user.session_id,
+                "mbti_type": user.mbti_type,
+                "name": user.name,
+                "summary": user.summary,
+                "content": user.content
+            }
+            for user in users
+        ]
     }
+
+    return result
 
 @diary_router.post("/generate_diary")
 async def generate_diary_endpoint(
