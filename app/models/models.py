@@ -36,7 +36,7 @@ class Diary(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(String, nullable=True)
-    user_id = Column(String, ForeignKey("user.user_id"))
+    user_id = Column(String, ForeignKey("users.user_id"))
     ingame_datetime = Column(String)
     content = Column(String)
     best_screenshot_path = Column(String, nullable=True)

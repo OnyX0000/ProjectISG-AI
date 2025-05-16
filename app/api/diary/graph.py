@@ -1,12 +1,13 @@
 from typing import TypedDict
 import pandas as pd
 import random
+from concurrent.futures import ThreadPoolExecutor
 from langgraph.graph import StateGraph
 from langchain_core.runnables import RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
-
 from app.models.models import diary_llm as llm
-from app.api.diary.rag import rag_chain
+from app.api.diary.rag import rag_chain, get_mbti_style, get_mbti_style_cached
+from app.utils.agent_tools import retrieve_mbti_style_from_web
 from app.api.diary.prompt_diary import prompt_template, emotion_tag_chain
 
 class DiaryState(TypedDict, total=False):
@@ -47,39 +48,76 @@ def prepare_log_node(state: DiaryState) -> DiaryState:
 
 def retrieve_mbti_style_node(state: DiaryState) -> DiaryState:
     mbti = state.get("mbti", "INFP")
+    
     if mbti in mbti_style_cache:
         state['style_context'] = mbti_style_cache[mbti]
     else:
-        result = rag_chain.invoke(f"MBTI {mbti} 말투 스타일을 알려줘")
-        mbti_style_cache[mbti] = result
-        state['style_context'] = result
+        # ✅ 병렬 처리로 RAG와 DuckDuckGo 호출
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            rag_future = executor.submit(get_mbti_style, mbti)
+            agent_future = executor.submit(retrieve_mbti_style_from_web, mbti)
+            
+            rag_result = rag_future.result()
+            agent_result = agent_future.result()
+        
+        # 🔄 결과 결합
+        combined_result = f"{rag_result}\n\n🔎 [Web Search Result]\n{agent_result}"
+        mbti_style_cache[mbti] = combined_result
+        state['style_context'] = combined_result
+    
     return state
 
 def assign_emotion_node(state: DiaryState) -> DiaryState:
-    # ✅ 감정 키워드를 무작위로 하나만 선택
     selected_emotion = random.choice(emotion_list)
     state['emotion_keywords'] = [selected_emotion]
 
-    # ✅ 감정 키워드에 맞는 태그를 랜덤으로 2개 생성
-    possible_tags = emotion_tag_mapping.get(selected_emotion, ["#감정", "#일상"])
-    state['emotion_tags'] = random.sample(possible_tags, 2)
-    
+    # ✅ 해시태그 매핑 최적화
+    state['emotion_tags'] = emotion_tag_mapping.get(selected_emotion, ["#감정", "#일상"])
     return state
 
 def generate_diary_node_factory(mbti: str):
     chain = prompt_template | llm | StrOutputParser()
 
+    # 🔄 캐시된 프롬프트 생성
+    prompt_cache = {}
+
     def node(state: DiaryState) -> DiaryState:
-        # 🛠️ LLM 호출
         try:
+            # 🔄 캐시된 스타일 검색
+            if mbti in prompt_cache:
+                style_context = prompt_cache[mbti]
+            else:
+                style_context = get_mbti_style_cached(mbti)
+                prompt_cache[mbti] = style_context
+
+            # ✅ 프롬프트 생성 최적화 (캐시된 경우 사용)
+            if mbti not in prompt_cache:
+                prompt = f"""
+                너는 감성 일지 생성자야. 유저의 MBTI는 {mbti}이고, 어투는 다음과 같아:
+                {style_context}
+                
+                활동 로그:
+                {state["log_text"]}
+
+                [생성 규칙]
+                1. {mbti} 성향에 맞춰 어투를 유지해.
+                2. 감정 상태에 맞춰 자연스러운 표현을 사용해.
+                3. 감성적이거나 논리적인 표현을 강화해.
+                4. 단순한 문장이 아닌, 깊이 있는 서술로 작성해.
+                """
+                prompt_cache[mbti] = prompt
+            else:
+                prompt = prompt_cache[mbti]
+
+            # 🔄 LLM 호출
             diary = chain.invoke({
                 "user_id": state["user_id"],
                 "date": state["date"],
                 "log_text": state["log_text"],
                 "mbti": state["mbti"],
-                "style_context": state["style_context"],
-                "emotion_tags": ", ".join(state["emotion_tags"]),
-                "emotion_keywords": ", ".join(state["emotion_keywords"])
+                "style_context": style_context,
+                "emotion_tags": ", ".join(state.get("emotion_tags", [])),
+                "emotion_keywords": ", ".join(state.get("emotion_keywords", []))
             })
         except Exception as e:
             print(f"❌ [ERROR] LLM 호출 중 오류 발생: {e}")

@@ -3,6 +3,7 @@ from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import TextLoader
 from app.models.models import diary_llm, embedding_model
+from functools import lru_cache
 
 CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 MBTI_STYLE_PATH = os.path.abspath(os.path.join(CURRENT_FILE_DIR, "../../../static/mbti_styles.txt"))
@@ -19,13 +20,40 @@ os.makedirs(FAISS_DB_DIR, exist_ok=True)
 index_file = os.path.join(FAISS_DB_DIR, "index.faiss")
 store_file = os.path.join(FAISS_DB_DIR, "index.pkl")
 
+# 🔄 문서 로딩 & 분리
 if os.path.exists(index_file) and os.path.exists(store_file):
-    # 저장된 벡터스토어가 있으면 불러오기
     vectorstore = FAISS.load_local(FAISS_DB_DIR, embedding_model, allow_dangerous_deserialization=True)
 else:
-    # 없으면 새로 생성하고 저장
-    docs = TextLoader(MBTI_STYLE_PATH, encoding='utf-8').load()
-    vectorstore = FAISS.from_documents(docs, embedding_model)
+    # 🔄 텍스트 파일 읽기
+    with open(MBTI_STYLE_PATH, 'r', encoding='utf-8') as f:
+        raw_text = f.read()
+
+    # 🔄 MBTI별로 분리
+    documents = []
+    current_mbti = None
+    current_text = ""
+
+    for line in raw_text.split('\n'):
+        if line.startswith("### "):
+            if current_mbti and current_text:
+                documents.append({
+                    "text": current_text.strip(),
+                    "metadata": {"mbti": current_mbti}
+                })
+            current_mbti = line[4:].split()[0]
+            current_text = ""
+        else:
+            current_text += line + "\n"
+    
+    # 마지막 MBTI에 대한 문서 추가
+    if current_mbti and current_text:
+        documents.append({
+            "text": current_text.strip(),
+            "metadata": {"mbti": current_mbti}
+        })
+    
+    # 🔄 FAISS에 임베딩
+    vectorstore = FAISS.from_documents(documents, embedding_model)
     vectorstore.save_local(FAISS_DB_DIR)
 
 # 🔎 retriever 생성
@@ -37,3 +65,24 @@ rag_chain = RetrievalQA.from_chain_type(
     retriever=retriever,
     return_source_documents=False
 )
+
+# ✅ RAG 체인 호출 함수 생성
+def get_mbti_style(mbti: str) -> str:
+    # 🔄 정확한 키워드로 검색
+    query = f"{mbti} 스타일의 어투와 표현 방식"
+    result = rag_chain.invoke(query)['result']
+    
+    # 🔄 결과가 없으면 기본값 반환
+    if not result or len(result.strip()) == 0:
+        return f"{mbti} 유형에 맞는 예시를 찾지 못했습니다."
+    
+    # 🔄 검색된 결과 반환
+    return result
+
+@lru_cache(maxsize=32)
+def get_mbti_style_cached(mbti: str) -> str:
+    """
+    RAG 체인을 통해 MBTI 스타일을 검색하고, 캐시 처리합니다.
+    """
+    print(f"🔎 [Cache] {mbti} 스타일을 조회합니다.")
+    return get_mbti_style(mbti)

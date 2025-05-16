@@ -51,6 +51,7 @@ def run_diary_generation(
     state = graph.invoke(input_data)
     diary_content = state["diary"]
 
+    # "qwen3" 모델을 LLM으로 사용시 처리 필요한 부분
     if "<think>" in diary_content and "</think>" in diary_content:
         start_idx = diary_content.index("<think>")
         end_idx = diary_content.index("</think>") + len("</think>")
@@ -90,7 +91,7 @@ def run_diary_generation(
         save_diary_to_mongo_db(
             session_id=session_id,
             user_id=user_id,
-            date=formatted_date,  # ✅ 날짜만 들어가도록 수정됨
+            date=formatted_date,  
             content=diary_content,
             best_screenshot_path=best_screenshot_path,
             emotion_tags=emotion_tags,
@@ -119,7 +120,6 @@ def format_diary_output(state: DiaryState) -> dict:
         "best_screenshot_filename": state.get("best_screenshot_path", "default.png"),  
         "formatted_date": state.get("date") 
     }
-
 
 def regenerate_emotion_info(diary_text: str) -> dict:
     """
