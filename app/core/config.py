@@ -16,3 +16,6 @@ POSTGRESQL_URI = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HO
 
 # ✅ MongoDB DB 설정
 MONGO_URI = os.getenv("MONGO_URI")
+
+# ✅ ELEVENLABS 설정
+ELEVENLABS_API_KEY = os.getenv("xi_API_KEY")

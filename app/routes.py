@@ -26,11 +26,14 @@ from app.api.diary.diary_generator import run_diary_generation, format_diary_out
 from app.utils.image_helper import save_screenshot
 from app.api.diary.screenshot_selector import select_best_screenshot
 from app.api.diary.prompt_diary import emotion_tag_chain
+from app.api.sfx.sfx_service import generate_sfx_with_translation
+from app.api.comfy.comfyui_service import generate_comfyui_prompt
 
 # Routers
 diary_router = APIRouter()
 mbti_router = APIRouter()
 log_router = APIRouter()
+etc_router = APIRouter()
 
 UPLOAD_DIR = "static/screenshot"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -463,3 +466,35 @@ async def delete_diary(session_id: str, user_id: str):
         raise HTTPException(status_code=404, detail="삭제할 Diary 데이터가 존재하지 않습니다.")
     
     return {"message": f"{result.deleted_count}개의 일지가 삭제되었습니다."}
+
+@etc_router.post("/sfx/generate")
+async def generate_sfx(prompt: str, duration: float = None, prompt_influence: float = 0.3):
+    """
+    텍스트 설명을 기반으로 효과음을 생성하고, 생성된 파일을 클라이언트가 바로 다운로드할 수 있도록 합니다.
+    """
+    try:
+        # ✅ SFX 생성 및 파일 경로 반환
+        result = generate_sfx_with_translation(prompt, duration, prompt_influence)
+
+        # ✅ 파일 경로 추출
+        file_path = result["file_path"]
+
+        # ✅ 파일이 존재하면 다운로드 반환
+        if os.path.exists(file_path):
+            return FileResponse(
+                path=file_path,
+                media_type='audio/mpeg',
+                filename=os.path.basename(file_path)
+            )
+        else:
+            raise HTTPException(status_code=404, detail="생성된 SFX 파일을 찾을 수 없습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@etc_router.post("/comfyui/generate")
+async def generate_comfyui(prompt: str):
+    """
+    ComfyUI에서 사용할 수 있는 형식으로 프롬프트 생성
+    """
+    result = generate_comfyui_prompt(prompt)
+    return result

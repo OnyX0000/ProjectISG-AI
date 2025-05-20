@@ -48,6 +48,8 @@ llm_question = ChatOllama(model="gemma3:12b", temperature=0.7)
 llm_evaluator = ChatOllama(model="gemma3:12b", temperature=0.7)
 diary_llm = ChatOllama(model="gemma3:12b", temperature=1.0)
 emo_llm = ChatOllama(model="gemma3:12b", temperature=0.2)
+sfx_llm = ChatOllama(model="qwen3:8b", temperature=0.2)
+comfy_llm = ChatOllama(model = "qwen3:8b", temperature=0.2)
 
 # Ollama 기반 텍스트 임베딩
 embedding_model = OllamaEmbeddings(model="nomic-embed-text")

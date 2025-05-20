@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import diary_router, mbti_router, log_router
+from app.routes import diary_router, mbti_router, log_router, etc_router
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(root_path = "/service2")
@@ -14,3 +14,6 @@ app.include_router(diary_router, prefix="/diary", tags=["감성일지"])
 
 # mbti 관련 API 라우터 등록
 app.include_router(mbti_router, prefix="/mbti", tags=["MBTI"])
+
+# 기타 API 라우터 등록
+app.include_router(etc_router, prefix="/etc", tags=["기타"])
