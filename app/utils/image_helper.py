@@ -3,6 +3,7 @@ from app.models.models import caption_model, image_processor
 from PIL import Image
 from fastapi import UploadFile
 import os
+import uuid
 import datetime
 import shutil
 
@@ -28,8 +29,8 @@ def run_captioning(image_path: str) -> str:
 
 def save_screenshot(file: UploadFile, user_id: str, session_id: str) -> str:
     """
-    스크린샷 파일을 screenshot 폴더에 저장합니다. 
-    클라이언트에서 전달된 파일명을 그대로 사용합니다.
+    스크린샷 파일을 UUID 기반으로 저장합니다. 
+    확장자는 .png로 고정됩니다.
     
     Args:
         file (UploadFile): 업로드된 파일 객체
@@ -39,16 +40,12 @@ def save_screenshot(file: UploadFile, user_id: str, session_id: str) -> str:
     Returns:
         str: 상대경로로 반환된 이미지 경로
     """
-    # static/screenshot 디렉토리 생성
+    # 디렉토리 생성
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # 클라이언트에서 전달된 파일명 그대로 사용
-    filename = file.filename
-    file_path = os.path.join(UPLOAD_DIR, filename)
-
-    # 동일한 이름이 있을 경우 기존 파일 삭제
-    if os.path.exists(file_path):
-        os.remove(file_path)
+    # 고유한 파일 이름 생성
+    unique_name = f"screenshot_{user_id}_{session_id}_{uuid.uuid4().hex[:8]}.png"
+    file_path = os.path.join(UPLOAD_DIR, unique_name)
 
     # 파일 저장
     with open(file_path, "wb") as f:

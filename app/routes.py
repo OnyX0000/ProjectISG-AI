@@ -89,6 +89,10 @@ async def upload_log_with_screenshot(
             "error": str(e)
         }
 
+    # ✅ 경로 보정 로직 추가
+    if screenshot_path and not screenshot_path.startswith("static/"):
+        screenshot_path = os.path.join("static", screenshot_path).replace("\\", "/")
+
     # ✅ SQLAlchemy 모델 생성
     log = UserLog(
         session_id=session_id,
