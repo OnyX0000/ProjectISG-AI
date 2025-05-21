@@ -66,8 +66,9 @@ def generate_sfx_with_translation(prompt: str, duration: float = None, prompt_in
         print(f"🔊 [INFO] SFX 생성 완료: {unique_file_path}")
         return {
             "message": "SFX 생성 성공",
-            "file_path": unique_file_path
+            "file_path": unique_file_path,
+            "filename": os.path.basename(unique_file_path)  
         }
-    
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
