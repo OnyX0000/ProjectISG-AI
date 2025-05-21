@@ -1,10 +1,10 @@
-# ProjectISG-AI
+# ProjectISG-AI(현재 진행중)
 
 **ProjectISG-AI**는 감성일지 생성, MBTI 분석, 행동 로그 관리, SFX 생성 등 다양한 기능을 제공하는 FastAPI 기반의 백엔드 프로젝트입니다. 해당 프로젝트는 단순한 AI 기술 시연을 넘어, 실제 게임 내 기능으로 적용 가능한 AI 모듈을 직접 설계·구현하여 게임 개발 및 서비스에 실질적인 도구로 활용하는 것을 핵심 목표로 합니다.
 
 ---
 
-프로토타입 발표자료 링크 : [https://www.canva.com/design/DAGm2FBkNCA/_2F5ffQoJRMfjoidKDWaSQ/view?utm_content=DAGm2FBkNCA&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h8e6b62348e]
+프로토타입 발표자료 링크(Canva) : [https://www.canva.com/design/DAGm2FBkNCA/_2F5ffQoJRMfjoidKDWaSQ/view?utm_content=DAGm2FBkNCA&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h8e6b62348e]
 
 ---
 
@@ -76,14 +76,48 @@ graph TD
 
 ## 📌 4️⃣ API 명세 요약
 
-| HTTP Method | Endpoint                      | 설명                 |
-| ----------- | ----------------------------- | ------------------ |
-| `POST`      | `/diary/generate_diary`       | 행동 로그 기반 감성일지 생성   |
-| `POST`      | `/mbti/ask`, `/mbti/answer`   | MBTI 질문 및 답변 제출    |
-| `GET`       | `/mbti/result/{user_id}`      | 특정 유저의 MBTI 결과 조회  |
-| `POST`      | `/log/upload_with_screenshot` | 행동 로그와 스크린샷 업로드    |
-| `GET`       | `/log/logs`                   | 전체 행동 로그 조회        |
-| `POST`      | `/sfx/generate`               | 자연어 프롬프트 기반 효과음 생성 |
+### 📂 `/log` 관련 API
+
+| HTTP Method | Endpoint                          | 설명                                |
+|-------------|-----------------------------------|-------------------------------------|
+| `POST`      | `/log/upload_with_screenshot`     | 행동 로그 및 스크린샷 업로드 및 저장         |
+| `GET`       | `/log/logs`                       | 전체 행동 로그 조회                       |
+| `DELETE`    | `/log/delete/{log_id}`            | 특정 행동 로그 삭제                       |
+| `PUT`       | `/log/update/{log_id}`            | 특정 행동 로그 수정                       |
+| `DELETE`    | `/log/diary/delete`               | Diary (MongoDB) 로그 삭제               |
+
+---
+
+### 📂 `/diary` 관련 API
+
+| HTTP Method | Endpoint                          | 설명                                |
+|-------------|-----------------------------------|-------------------------------------|
+| `POST`      | `/diary/new_session`              | 새로운 Diary 세션 ID 생성                |
+| `POST`      | `/diary/generate_diary`           | 행동 로그 기반 감성일지 생성 (DB 저장 X)      |
+| `POST`      | `/diary/save_diary`               | 대표 이미지 선택 후 Diary 저장 (MongoDB)     |
+| `POST`      | `/diary/get_all_diaries`          | 특정 유저/세션의 모든 감성일지 조회           |
+| `POST`      | `/diary/regenerate_emotion`       | 기존 감성일지 텍스트 기반 감정 키워드 재생성    |
+| `GET`       | `/diary/render_image/{image_name}`| 스크린샷 파일 이름 기반 이미지 반환           |
+
+---
+
+### 📂 `/mbti` 관련 API
+
+| HTTP Method | Endpoint                      | 설명                                 |
+|-------------|-------------------------------|--------------------------------------|
+| `POST`      | `/mbti/ask`                   | MBTI 질문 생성                           |
+| `POST`      | `/mbti/answer`                | MBTI 응답 제출 및 분석                     |
+| `GET`       | `/mbti/result/{user_id}`      | 특정 유저의 MBTI 추론 결과 확인             |
+| `GET`       | `/mbti/users?limit=N`         | 저장된 MBTI 유저 정보 일부 조회 + 전체 개수 반환 |
+
+---
+
+### 📂 `/etc` 관련 API
+
+| HTTP Method | Endpoint                  | 설명                                         |
+|-------------|---------------------------|----------------------------------------------|
+| `POST`      | `/etc/sfx/generate`       | 자연어 프롬프트 기반 SFX 생성 및 다운로드 제공     |
+| `POST`      | `/etc/comfyui/generate`   | ComfyUI용 포맷 변환 프롬프트 생성                |
 
 ---
 
