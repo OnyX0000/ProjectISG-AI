@@ -54,12 +54,12 @@
 ```mermaid
 graph TD
   A[행동 로그 및 유저 MBTI] --> B[prepare_log + retrieve_mbti]
-  B --> C[assign_emotion]
-  C --> D{MBTI 유형 조건 분기}
-  D -->|INTP| E1[generate_diary_INTP]
-  D -->|ESFJ| E2[generate_diary_ESFJ]
-  D -->|INFJ| E3[generate_diary_INFJ]
-  E1 & E2 & E3 --> F[감성일지 출력 + 저장]
+  B --> C{MBTI 유형 조건 분기}
+  C -->|INTP| E1[generate_diary_INTP]
+  C -->|ESFJ| E2[generate_diary_ESFJ]
+  C -->|INFJ| E3[generate_diary_INFJ]
+  E1 & E2 & E3 --> D[감성일지 출력 + 저장]
+  D --> F[assign_emotion → 감정 키워드/태그 생성]
 
   G[자연어 프롬프트] --> H[prompt_helper.py]
   H --> I[positive/negative prompt 생성]
