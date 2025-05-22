@@ -23,3 +23,6 @@ ELEVENLABS_API_KEY = os.getenv("xi_API_KEY")
 # ✅ DISCORD 설정
 DISCORD_TOKEN = os.getenv("DISCORD_API_KEY")
 FASTAPI_URL = "http://localhost:8016/service2/etc/sfx/generate"
+
+# ✅ GOOGLE 설정
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
