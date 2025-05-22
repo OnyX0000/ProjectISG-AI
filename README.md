@@ -68,9 +68,9 @@ graph TD
 
 * **LangGraph**: 상태 기반 감성일지 생성 파이프라인 구축
 * **Ollama LLM**: 감성 표현 생성을 위한 LLM 호출
-* **SFX/ComfyUI Translator**: 프롬프트 분석 및 효과음 생성 연동
-* **SQLAlchemy + PostgreSQL**: 사용자 및 MBTI 세션 상태 관리
-* **MongoDB**: 감성일지, 감정 키워드, SFX 데이터 저장
+* **SFX/ComfyUI Translator**: 프롬프트 번역 및 효과음 생성 
+* **SQLAlchemy + PostgreSQL**: 사용자 및 MBTI 세션 상태 관리, 로그 데이터 저장
+* **MongoDB**: 감성일지, 감정 키워드, 감정 태그 저장
 
 ---
 
