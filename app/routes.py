@@ -221,11 +221,11 @@ async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
     judged = judge_response(input.response, session_state["current_dimension"])
     update_score(session_state, judged)
 
-    # ✅ 5회 QA가 끝나면 자동으로 메모리 릴리스 및 DB 저장
+    # ✅ 7회 QA가 끝나면 자동으로 메모리 릴리스 및 DB 저장
     session_state["question_count"] += 1
     update_session(input.user_id, input.session_id, session_state, db)  # ✅ db 전달
 
-    if session_state["question_count"] >= 10:
+    if session_state["question_count"] >= 7:
         print(f"✅ [INFO] ({input.user_id}, {input.session_id})의 세션 종료 및 메모리 릴리스")
         return {"message": "MBTI 테스트가 완료되었습니다. 세션이 종료되었습니다.", "completed": True}
 

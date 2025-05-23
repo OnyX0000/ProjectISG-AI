@@ -123,7 +123,7 @@ def get_session(user_id: str, session_id: str, db: Session) -> dict:
 def update_session(user_id: str, session_id: str, state: dict, db: Session):
     """
     업데이트된 세션 정보를 Memory에 반영합니다.
-    질문이 10회 이상 진행되면 Memory에서 DB에 저장 후 제거합니다.
+    질문이 7회 이상 진행되면 Memory에서 DB에 저장 후 제거합니다.
     """
     memory = get_user_memory(user_id, session_id)
 
@@ -144,7 +144,7 @@ def update_session(user_id: str, session_id: str, state: dict, db: Session):
     session_data = memory.load_memory_variables({"user_input": "Update"})
     print(f"🔍 [DEBUG] 업데이트 후 메모리 상태: {session_data}")
 
-    if state["question_count"] >= 10:
+    if state["question_count"] >= 7:
         print(f"✅ [INFO] ({user_id}, {session_id})의 메모리 릴리스 처리 및 DB 저장을 시작합니다.")
         
         # ✅ DB에 저장 처리
