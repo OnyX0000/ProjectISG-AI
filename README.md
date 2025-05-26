@@ -31,7 +31,7 @@
    * 로그 업로드, 조회, 수정, 삭제 기능 및 스크린샷 첨부
 4. **SFX 생성**
 
-   * 자연어 프롬프트를 영어로 변환하고 긍정/부정 프롬프트로 분리 후, ComfyUI에 전달하여 스타일 기반 효과음 생성
+   * 자연어 프롬프트를 LLM으로 영어로 변환하고 긍정/부정 프롬프트로 분리 후, ELEVENLABS API로 스타일 기반 효과음 생성
 
 ---
 
@@ -132,7 +132,7 @@ graph TD
   * `retrieve_mbti`: 유저의 MBTI를 DB에서 조회
   * `assign_emotion`: 무작위 감정 태그와 키워드 지정
   * `generate_diary_{MBTI}`: MBTI에 따라 맞춤형 프롬프트 적용
-  * `output`: 감성일지 결과 및 감정 키워드 반환 및 저장
+  * `output`: 감성일지 결과 및 감정 키워드 반환 및 저장 및 오류 처리
 * **출력 저장**: `Diary` 테이블과 `emotion_tags`, `emotion_keywords` MongoDB에 병렬 저장
 
 ### 🧠 MBTI 추론 로직
