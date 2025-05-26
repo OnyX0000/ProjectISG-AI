@@ -143,10 +143,10 @@ graph TD
 
 ### 🎧 SFX 생성 로직
 
-* 입력 텍스트 → 영어 번역 → 긍/부정 키워드 분리
-* 프롬프트 형식: `positive_prompt`, `negative_prompt`, `style`
-* ComfyUI에서 사용할 입력 포맷으로 변환 후 API 호출
-* 출력: `.txt` 프롬프트 또는 SFX 리소스에 사용될 수 있음
+* 입력 텍스트 → 영어 번역 
+* 프롬프트 형식: 'prompt', 'duration', 'prompt_influence'
+* ELEVENLABS API 호출
+* 출력: mp3 파일로 반환
 
 ---
 
