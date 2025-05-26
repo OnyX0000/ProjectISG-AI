@@ -2,13 +2,7 @@ import os
 import discord
 import aiohttp
 import asyncio
-from core.config import DISCORD_TOKEN, FASTAPI_URL
-
-OUTPUT_DIR = "/home/wanted-1/ComfyUI/output"
-OUTPUT_3D_DIR = os.path.join(OUTPUT_DIR, "3D")
-MVADAPTER_SERVER = "http://192.168.10.96:8002"
-HY3D_SERVER = "http://192.168.20.50:8003"
-PROMPT_CONVERT_API = "http://192.168.10.96:8016/etc/comfyui/generate"
+from core.config import DISCORD_TOKEN, FASTAPI_URL, OUTPUT_DIR, OUTPUT_3D_DIR, MVADAPTER_SERVER, HY3D_SERVER, PROMPT_CONVERT_API
 
 os.makedirs(OUTPUT_3D_DIR, exist_ok=True)
 

@@ -26,3 +26,10 @@ FASTAPI_URL = "http://localhost:8016/service2/etc/sfx/generate"
 
 # ✅ GOOGLE 설정
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+
+OUTPUT_DIR = os.getenv("OUTPUT_DIR")
+OUTPUT_3D_DIR = os.path.join(OUTPUT_DIR, "3D")
+MVADAPTER_SERVER = os.getenv("MVADAPTER_SERVER")
+HY3D_SERVER = os.getenv("HY3D_SERVER")
+PROMPT_CONVERT_API = os.getenv("PROMPT_CONVERT_API")
