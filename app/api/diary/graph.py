@@ -152,8 +152,8 @@ def build_diary_graph() -> StateGraph:
     builder.add_node("output", lambda state: state)
 
     builder.set_entry_point("prepare_log")
-    builder.add_edge("prepare_log", "retrieve_mbti")
-    builder.add_edge("retrieve_mbti", "assign_emotion")
+    builder.add_edge("prepare_log", "retrieve_mbti", on_error = "output")
+    builder.add_edge("retrieve_mbti", "assign_emotion", on_error = "output")
 
     def route_by_mbti(state: DiaryState) -> str:
         node_key = f"generate_diary_{state.get('mbti', 'INTP')}"
@@ -165,8 +165,8 @@ def build_diary_graph() -> StateGraph:
     builder.add_conditional_edges("assign_emotion", route_by_mbti, route_map)
 
     for node in route_map.values():
-        builder.add_edge(node, "generate_emotion_info")
-    builder.add_edge("generate_emotion_info", "output")
+        builder.add_edge(node, "generate_emotion_info", on_error = "output")
+    builder.add_edge("generate_emotion_info", "output", on_error = "output")
 
     builder.set_finish_point("output")
     return builder.compile()
