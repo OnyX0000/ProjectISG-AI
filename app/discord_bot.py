@@ -95,7 +95,7 @@ async def on_message(message):
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{MVADAPTER_SERVER}/generate",
-                    json={"user_prompt": prompt, "user_negative": "low quality, shadow"}
+                    json={"user_prompt": prompt, "user_negative": "low quality, background"}
                 ) as resp:
                     if resp.status != 200:
                         await message.channel.send("❌ 이미지 생성 실패 (/generate)")
