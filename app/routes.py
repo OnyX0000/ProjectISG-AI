@@ -263,6 +263,59 @@ async def get_users(limit: int = Query(default=3, description="조회할 사용�
 
     return result
 
+@mbti_router.post("/skip")
+async def skip_mbti(
+    user_id: str = Body(...),
+    session_id: str = Body(...),
+    db: DbSession = Depends(get_db)
+):
+    """
+    사용자가 MBTI 테스트를 스킵할 경우,
+    INTJ("조용한 효율 추구의 분석가")로 PostgreSQL users 테이블에 저장합니다.
+    """
+
+    # ✅ 기존 데이터 중복 확인
+    existing = db.query(UserMBTI).filter(
+        UserMBTI.user_id == user_id,
+        UserMBTI.session_id == session_id
+    ).first()
+
+    if existing:
+        return {"message": "이미 MBTI 정보가 저장되어 있습니다.", "mbti_type": existing.mbti_type}
+
+    # ✅ 스킵 시 지정할 INTJ 프로필 하드코딩
+    mbti_type = "INTJ"
+    profile = {
+        "name": "조용한 효율 추구의 분석가",
+        "summary": "전략적 사고와 목표 지향적 계획에 능함.",
+        "content": "혼자서 깊이 있게 사고하며 효율적인 방법을 찾는 데 집중합니다. 독립적이며 목표 달성을 위한 체계적인 접근을 선호합니다."
+    }
+
+    # ✅ DB 삽입
+    new_user = UserMBTI(
+        user_id=user_id,
+        session_id=session_id,
+        mbti_type=mbti_type,
+        name=profile["name"],
+        summary=profile["summary"],
+        content=profile["content"]
+    )
+
+    try:
+        db.add(new_user)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"DB 저장 중 오류 발생: {str(e)}")
+
+    return {
+        "message": "MBTI 테스트를 건너뛴 사용자에게 INTJ 성향이 저장되었습니다.",
+        "user_id": user_id,
+        "session_id": session_id,
+        "mbti_type": mbti_type,
+        "assigned_profile": profile
+    }
+
 @diary_router.post("/generate_diary")
 async def generate_diary_endpoint(
     session_id: str = Body(...),

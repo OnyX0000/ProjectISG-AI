@@ -110,10 +110,12 @@ async def on_message(message):
                 return
 
             reference_filename = sorted(image_files, key=lambda f: os.path.getmtime(os.path.join(OUTPUT_DIR, f)))[-1]
+            reference_path = os.path.join(OUTPUT_DIR, reference_filename)
             print(f"[DEBUG] reference_filename for MVAdapter: {reference_filename}")
 
-            # ✅ 3. MVAdapter 실행
-            await message.channel.send("🎨 텍스처 이미지 생성 중...")
+            # ✅ 텍스처 생성 시작 메시지 + 생성된 이미지 Discord 전송
+            await message.channel.send("🎨 텍스처 이미지 생성 중...", file=discord.File(reference_path))
+
             async with aiohttp.ClientSession() as session:
                 mv_payload = {
                     "reference_filename": reference_filename,

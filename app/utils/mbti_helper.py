@@ -19,7 +19,7 @@ class CustomBufferMemory(ConversationBufferMemory):
         if key == "Update":
             # ✅ JSON 상태 저장
             state = outputs.get("state")
-            print(f"📝 [DEBUG] Saving state to CustomBufferMemory: {state}")
+            # print(f"📝 [DEBUG] Saving state to CustomBufferMemory: {state}")
             self.state_data["state"] = state
         super().save_context(inputs, outputs)
 
@@ -28,7 +28,7 @@ class CustomBufferMemory(ConversationBufferMemory):
         key = inputs.get("user_input")
         print(f"🔍 [DEBUG] Loading state from CustomBufferMemory for key: {key}")
         if "state" in self.state_data:
-            print(f"✅ [DEBUG] Found state: {self.state_data['state']}")
+            # print(f"✅ [DEBUG] Found state: {self.state_data['state']}")
             return {"state": self.state_data["state"]}
         else:
             print("⚠️ [WARN] Memory에 'state'가 없습니다. 초기화 상태로 반환합니다.")
@@ -91,7 +91,7 @@ def get_session(user_id: str, session_id: str, db: Session) -> dict:
     # ✅ 메모리 상태 로딩 시도
     print(f"🔍 [DEBUG] Memory 상태 로드 시도: User ID = {user_id}, Session ID = {session_id}")
     session_data = memory.load_memory_variables({"user_input": "Update"})
-    print(f"🔍 [DEBUG] 로드된 Memory 데이터: {session_data}")
+    # print(f"🔍 [DEBUG] 로드된 Memory 데이터: {session_data}")
 
     if not session_data:
         state = init_mbti_state()
@@ -107,7 +107,7 @@ def get_session(user_id: str, session_id: str, db: Session) -> dict:
                 if isinstance(state.get("asked_dimensions"), list):
                     state["asked_dimensions"] = set(state["asked_dimensions"])
                 
-                print(f"🔄 [DEBUG] 로딩된 세션 상태: {state}")
+                # print(f"🔄 [DEBUG] 로딩된 세션 상태: {state}")
                 return state
             except json.JSONDecodeError as e:
                 print(f"❌ [ERROR] JSON 디코딩 실패: {e}")
@@ -135,14 +135,14 @@ def update_session(user_id: str, session_id: str, state: dict, db: Session):
     serialized_state = json.dumps(state)
 
     # ✅ 디버그 로그 추가
-    print(f"🔄 [DEBUG] 세션 업데이트: User ID = {user_id}, Session ID = {session_id}")
-    print(f"📝 업데이트할 세션 상태: {state}")
+    # print(f"🔄 [DEBUG] 세션 업데이트: User ID = {user_id}, Session ID = {session_id}")
+    # print(f"📝 업데이트할 세션 상태: {state}")
 
     memory.save_context({"user_input": "Update"}, {"state": serialized_state})
 
     # ✅ 업데이트 후 다시 불러와서 확인
     session_data = memory.load_memory_variables({"user_input": "Update"})
-    print(f"🔍 [DEBUG] 업데이트 후 메모리 상태: {session_data}")
+    # print(f"🔍 [DEBUG] 업데이트 후 메모리 상태: {session_data}")
 
     if state["question_count"] >= 7:
         print(f"✅ [INFO] ({user_id}, {session_id})의 메모리 릴리스 처리 및 DB 저장을 시작합니다.")
@@ -167,7 +167,7 @@ def update_score(state: Dict, judged: Dict[str, str]):
     side = judged["side"]
 
     # ✅ 디버그 메시지 추가
-    print(f"🔍 [DEBUG] Dimension: {dim}, Side: {side}")
+    # print(f"🔍 [DEBUG] Dimension: {dim}, Side: {side}")
 
     # ✅ Dimension이 올바르게 나뉘었는지 확인
     if "-" not in dim:

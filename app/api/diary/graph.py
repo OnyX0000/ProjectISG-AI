@@ -128,15 +128,6 @@ def generate_diary_node_factory(mbti: str):
 
     return node
 
-def output_node(state: DiaryState) -> DiaryState:
-    if "diary" not in state or not state["diary"]:
-        state["diary"] = "❌ 감성 일지 생성 중 오류가 발생했습니다."
-    if "emotion_tags" not in state or not state["emotion_tags"]:
-        state["emotion_tags"] = ["#오류", "#생성실패"]
-    if "emotion_keywords" not in state or not state["emotion_keywords"]:
-        state["emotion_keywords"] = ["오류"]
-    return state
-
 def generate_emotion_info(state: DiaryState) -> DiaryState:
     result = emotion_tag_chain.invoke({"diary": state["diary"]})
     state["emotion_keywords"] = result.get("keywords", [])
@@ -158,11 +149,11 @@ def build_diary_graph() -> StateGraph:
     builder.add_node("generate_diary_default", RunnableLambda(default_diary_node))
 
     builder.add_node("generate_emotion_info", RunnableLambda(generate_emotion_info))
-    builder.add_node("output", RunnableLambda(output_node))
+    builder.add_node("output", lambda state: state)
 
     builder.set_entry_point("prepare_log")
-    builder.add_edge("prepare_log", "retrieve_mbti", on_error = "output")
-    builder.add_edge("retrieve_mbti", "assign_emotion", on_error = "output")
+    builder.add_edge("prepare_log", "retrieve_mbti")
+    builder.add_edge("retrieve_mbti", "assign_emotion")
 
     def route_by_mbti(state: DiaryState) -> str:
         node_key = f"generate_diary_{state.get('mbti', 'INTP')}"
@@ -174,8 +165,8 @@ def build_diary_graph() -> StateGraph:
     builder.add_conditional_edges("assign_emotion", route_by_mbti, route_map)
 
     for node in route_map.values():
-        builder.add_edge(node, "generate_emotion_info", on_error = "output")
-    builder.add_edge("generate_emotion_info", "output", on_error = "output")
+        builder.add_edge(node, "generate_emotion_info")
+    builder.add_edge("generate_emotion_info", "output")
 
     builder.set_finish_point("output")
     return builder.compile()
