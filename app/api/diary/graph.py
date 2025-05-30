@@ -48,24 +48,36 @@ def prepare_log_node(state: DiaryState) -> DiaryState:
 
 def retrieve_mbti_style_node(state: DiaryState) -> DiaryState:
     mbti = state.get("mbti", "INFP")
-    
+
     if mbti in mbti_style_cache:
         state['style_context'] = mbti_style_cache[mbti]
     else:
-        # ✅ 병렬 처리로 RAG와 DuckDuckGo 호출
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            rag_future = executor.submit(get_mbti_style, mbti)
-            agent_future = executor.submit(retrieve_mbti_style_from_web, mbti)
-            
-            rag_result = rag_future.result()
-            agent_result = agent_future.result()
-        
-        # 🔄 결과 결합
-        combined_result = f"{rag_result}\n\n🔎 [Web Search Result]\n{agent_result}"
-        mbti_style_cache[mbti] = combined_result
-        state['style_context'] = combined_result
-    
+        rag_result = get_mbti_style(mbti)
+        mbti_style_cache[mbti] = rag_result
+        state['style_context'] = rag_result
+
     return state
+
+# def retrieve_mbti_style_node(state: DiaryState) -> DiaryState:
+#     mbti = state.get("mbti", "INFP")
+    
+#     if mbti in mbti_style_cache:
+#         state['style_context'] = mbti_style_cache[mbti]
+#     else:
+#         # ✅ 병렬 처리로 RAG와 DuckDuckGo 호출
+#         with ThreadPoolExecutor(max_workers=2) as executor:
+#             rag_future = executor.submit(get_mbti_style, mbti)
+#             agent_future = executor.submit(retrieve_mbti_style_from_web, mbti)
+            
+#             rag_result = rag_future.result()
+#             agent_result = agent_future.result()
+        
+#         # 🔄 결과 결합
+#         combined_result = f"{rag_result}\n\n🔎 [Web Search Result]\n{agent_result}"
+#         mbti_style_cache[mbti] = combined_result
+#         state['style_context'] = combined_result
+    
+#     return state
 
 def assign_emotion_node(state: DiaryState) -> DiaryState:
     selected_emotion = random.choice(emotion_list)

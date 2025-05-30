@@ -2,6 +2,7 @@ from typing import Dict, Tuple
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from app.models.models import llm_question, llm_evaluator
+from fastapi import HTTPException
 
 # 질문 생성을 위한 프롬프트
 question_prompt = ChatPromptTemplate.from_template(
@@ -72,19 +73,56 @@ def generate_question(history: str, remaining_dimensions: str) -> tuple[str, str
 
 # 응답 평가 함수
 def judge_response(response: str, target_dimension: str) -> dict:
+    # 1) 체인 호출
     result = judge_chain.invoke({
         "response": response,
         "target_dimension": target_dimension
     })
+    # 2) 줄 단위로 분리
     lines = result.strip().splitlines()
-    dim_line = next(line for line in lines if line.lower().startswith("dimension"))
-    side_line = next(line for line in lines if line.lower().startswith("side"))
-    reason_line = next((line for line in lines if line.lower().startswith("이유")), "")
-    dim = dim_line.split(":")[1].strip()
-    side = side_line.split(":")[1].strip()
-    reason = reason_line.split(":", 1)[1].strip() if ":" in reason_line else "(근거 없음)"
+
+    # 3) 각 키워드 라인 찾기 (없으면 None 또는 빈 문자열)
+    dim_line    = next((line for line in lines if line.lower().startswith("dimension")), None)
+    side_line   = next((line for line in lines if line.lower().startswith("side")),      None)
+    reason_line = next((line for line in lines if line.lower().startswith("이유")),       "")
+
+    # 4) 필수 정보 누락 시 예외 처리
+    if dim_line is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"LLM 응답에 'Dimension' 정보가 없습니다. 응답 전체:\n{result}"
+        )
+    if side_line is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"LLM 응답에 'Side' 정보가 없습니다. 응답 전체:\n{result}"
+        )
+
+    # 5) 콜론 이후 파싱
+    try:
+        dim   = dim_line.split(":", 1)[1].strip()
+    except IndexError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'Dimension' 라인 파싱 실패: '{dim_line}'"
+        )
+
+    try:
+        side  = side_line.split(":", 1)[1].strip()
+    except IndexError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'Side' 라인 파싱 실패: '{side_line}'"
+        )
+
+    # 6) 이유는 선택적이므로, 없으면 기본 문구
+    if ":" in reason_line:
+        reason = reason_line.split(":", 1)[1].strip()
+    else:
+        reason = "(근거 없음)"
+
     return {
         "dimension": dim,
-        "side": side,
-        "reason": reason
+        "side":      side,
+        "reason":    reason
     }

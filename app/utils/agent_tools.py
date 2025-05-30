@@ -16,16 +16,17 @@ def retrieve_mbti_style_from_web(mbti: str) -> str:
     """
     DuckDuckGo Tool을 사용하여 웹에서 MBTI 스타일 정보를 검색합니다.
     """
-    query = f"{mbti} 유형의 MZ 말투 스타일 설명"
-    print(f"🔎 [Agent] DuckDuckGo로 '{query}' 검색 중...")
+    # query = f"{mbti} 유형의 MZ 말투 스타일 설명"
+    # print(f"🔎 [Agent] DuckDuckGo로 '{query}' 검색 중...")
 
-    # ✅ Tool 실행
-    result = search_tool.func(query)
+    # # ✅ Tool 실행
+    # result = search_tool.func(query)
 
-    if not result or len(result.strip()) == 0:
-        print("🔎 [Agent] 검색 결과가 없습니다.")
-        return "검색 결과를 찾을 수 없습니다."
+    # if not result or len(result.strip()) == 0:
+    #     print("🔎 [Agent] 검색 결과가 없습니다.")
+    #     return "검색 결과를 찾을 수 없습니다."
     
-    print(f"🔎 [Agent] 검색 결과:\n{result}")
-    return result
+    # print(f"🔎 [Agent] 검색 결과:\n{result}")
+    # return result
+    return ''
 
