@@ -232,24 +232,20 @@ async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
     session_state["question_count"] += 1
     update_session(input.user_id, input.session_id, session_state, db)
 
+    final_mbti = update_session(input.user_id, input.session_id, session_state, db)
+
     if session_state["question_count"] >= 7:
-        print(f"✅ [INFO] ({input.user_id}, {input.session_id})의 세션 종료 및 메모리 릴리스")
+        mbti_type = final_mbti or "UNKNOWN"
+        judged_sentence = f"당신의 성향 테스트 결과는 {mbti_type}입니다."
 
-        mbti_type = judged if isinstance(judged, str) else judged.get("type", "UNKNOWN")
-        mbti_info = MBTI_PROFILES.get(mbti_type)
-        if mbti_info:
-            judged_sentence = (
-                f"당신의 성향 테스트 결과는 '{mbti_info['name']}'입니다. "
-                f"{mbti_info['summary']} {mbti_info['content']}"    # 일단 테스트용으로 넣어놓기
-            )
-        else:
-            judged_sentence = f"당신의 성향 테스트 결과는 {mbti_type}입니다."
-
-        return {"message": "MBTI 테스트가 완료되었습니다.", "judged": judged_sentence, "completed": True}
-        
+        return {
+            "message": "MBTI 테스트가 완료되었습니다.",
+            "judged": judged_sentence,
+            "completed": True
+        }
     return {
         "message": "응답이 저장되었습니다. 다음 질문을 요청하세요.",
-        "judged": judged,  
+        "judged": judged,
         "completed": False
     }
 

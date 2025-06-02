@@ -4,6 +4,7 @@ from langchain_ollama import ChatOllama, OllamaEmbeddings
 from transformers import BlipProcessor, BlipForConditionalGeneration
 from functools import lru_cache
 from langchain_openai import ChatOpenAI
+from app.core.config import OPENAI_API_KEY
 from app.utils.embedding_wrapper import LangchainEmbeddingWrapper # 허깅페이스 임베딩모델로 수정할때 사용 
 import torch
 
@@ -58,17 +59,17 @@ def get_llm(model_name: str, temperature: float = 0.7) -> ChatOllama:
 # ✅ 메모리 절약 + 기존 코드 호환
 llm_question = get_llm("gemma3:12b", temperature=0.7)
 llm_evaluator = get_llm("qwen3:8b", temperature=0.7)
-# diary_llm = ChatOpenAI(model="gpt-4o-mini", temperature=1.0)
-diary_llm = get_llm("gemma3:12b", temperature=1.0) 
+# diary_llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=1.0)
+diary_llm = ChatOllama(model="gemma3:12b", temperature=1.0)
 emo_llm = get_llm("gemma3:12b", temperature=0.2)
 sfx_llm = get_llm("qwen3:8b", temperature=0.2)
 comfy_llm = get_llm("qwen3:8b", temperature=0.2)
 
 # ✅ 텍스트 임베딩
-# embedding_model = LangchainEmbeddingWrapper("dragonkue/BGE-m3-ko") 이거 쓰려면 벡터DB 다시 만들어야 함
+c_embedding_model = LangchainEmbeddingWrapper("dragonkue/BGE-m3-ko")
 embedding_model = OllamaEmbeddings(model="nomic-embed-text:latest")
 
-# ✅ 이미지 처리 모델 (지연 로딩 + CPU에 올림)
+# ✅ 이미지 처리 모델 
 image_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base", use_fast=True)
 caption_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to("cuda" if torch.cuda.is_available() else "cpu")
 

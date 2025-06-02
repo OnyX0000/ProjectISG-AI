@@ -24,9 +24,11 @@ ELEVENLABS_API_KEY = os.getenv("xi_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_API_KEY")
 FASTAPI_URL = "http://localhost:8016/service2/etc/sfx/generate"
 
-# ✅ GOOGLE 설정
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# ✅ GPT 설정
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# ✅ SupertoneAI 설정
+SUPERTONEAI_API_KEY = os.getenv("x-sup-api-key")
 
 OUTPUT_DIR = os.getenv("OUTPUT_DIR")
 OUTPUT_3D_DIR = os.path.join(OUTPUT_DIR, "3D")

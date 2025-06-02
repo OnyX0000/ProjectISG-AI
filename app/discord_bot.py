@@ -7,7 +7,7 @@ from core.config import (
     DISCORD_TOKEN, FASTAPI_URL,
     OUTPUT_DIR, OUTPUT_3D_DIR,
     MVADAPTER_SERVER, HY3D_SERVER,
-    PROMPT_CONVERT_API
+    PROMPT_CONVERT_API, SUPERTONEAI_API_KEY
 )
 
 os.makedirs(OUTPUT_3D_DIR, exist_ok=True)
@@ -46,17 +46,28 @@ def help_message_text():
         "`!3d <프롬프트>`\n"
         "   - 🧊 예시: `!3d 나무로 만든 작은 의자`\n"
         "     → `프롬프트`: **디테일한 묘사가 많을수록 좋습니다.**\n\n"
+        "`!tts <텍스트>, <voice_id>, <language>, <style>[, pitch_shift][, pitch_variance][, speed]`\n"
+        "   - 🗣️ 예시: `!tts 안녕하세요, sbd_v2_kor_jinho, ko, happy, 0.5, 0.2, 1.0`\n"
+        "     → `텍스트`: 읽어줄 문장 (한글 또는 영어)\n"
+        "     → `voice_id`: 사용 가능한 음성 ID 중 택 1\n"
+        "        - 예: `sbd_v2_kor_jinho`, `sbd_v2_kor_minho`, `sbd_v2_eng_emma` 등\n"
+        "     → `language`: 언어 코드 (예: `ko`, `en`)\n"
+        "     → `style`: 감정 스타일 (예: `neutral`, `happy`, `sad`, `angry`, `calm`, `joy`, `fear`, `disgust`, `surprise`, `trust`)\n"
+        "     → `pitch_shift`: 음 높이 조절값 (범위: `-2.0` ~ `2.0`, 기본값: `0.0`)\n"
+        "     → `pitch_variance`: 억양 다양성 조절 (범위: `0.0` ~ `1.0`, 기본값: `0.0`)\n"
+        "     → `speed`: 말하는 속도 (범위: `0.5` ~ `2.0`, 기본값: `1.0`)\n"
+
     )
 
-@client.event
-async def on_ready():
-    global help_channel, last_help_time
-    print(f"✅ Logged in as {client.user}")
-    help_channel = discord.utils.get(client.get_all_channels(), name="asset_생성")  # 메시지를 보낼 채널
-    if help_channel:
-        await help_channel.send(help_message_text())
-        last_help_time = datetime.utcnow()
-        asyncio.create_task(periodic_help_sender())
+# @client.event
+# async def on_ready():
+#     global help_channel, last_help_time
+#     print(f"✅ Logged in as {client.user}")
+#     help_channel = discord.utils.get(client.get_all_channels(), name="asset_생성")  # 메시지를 보낼 채널
+#     if help_channel:
+#         await help_channel.send(help_message_text())
+#         last_help_time = datetime.utcnow()
+#         asyncio.create_task(periodic_help_sender())
 
 async def periodic_help_sender():
     global last_help_time, help_channel
@@ -84,7 +95,7 @@ async def on_message(message):
         await message.channel.send(help_message_text())
         return
 
-    # ✅ 유지: SFX 생성 처리
+    # ✅ SFX 생성 처리
     if message.content.startswith("!sfx "):
         try:
             content = message.content[5:].strip()
@@ -207,5 +218,103 @@ async def on_message(message):
 
         except Exception as e:
             await message.channel.send(f"❌ 3D 생성 중 오류 발생: {e}")
+
+    # ✅ TTS 처리
+    elif message.content.startswith("!tts "):
+        try:
+            content = message.content[5:].strip()
+            parts = [p.strip() for p in content.split(",")]
+
+            text = parts[0]
+            voice_id = parts[1] if len(parts) > 1 else "91992bbd4758bdcf9c9b01"
+            language = parts[2] if len(parts) > 2 else "ko"
+            style = parts[3] if len(parts) > 3 else "neutral"
+            model = parts[4] if len(parts) > 4 else "sona_speech_1"
+            pitch_shift = float(parts[5]) if len(parts) > 5 else 0.0
+            pitch_variance = float(parts[6]) if len(parts) > 6 else 1.0
+            speed = float(parts[7]) if len(parts) > 7 else 1.0
+
+            payload = {
+                "text": text,
+                "language": language,
+                "style": style,
+                "model": model,
+                "voice_settings": {
+                    "pitch_shift": pitch_shift,
+                    "pitch_variance": pitch_variance,
+                    "speed": speed
+                }
+            }
+
+            headers = {
+                "x-sup-api-key": SUPERTONEAI_API_KEY,
+                "Content-Type": "application/json"
+            }
+
+            url = f"https://supertoneapi.com/v1/text-to-speech/{voice_id}?output_format=wav"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=headers) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        await message.channel.send(f"❌ TTS 생성 실패 (status: {resp.status})\n{error_text}")
+                        return
+
+                    filename = "tts_output.mp3"
+                    with open(filename, "wb") as f:
+                        f.write(await resp.read())
+
+                    await message.channel.send(f"✅ TTS 생성 완료: `{text}`", file=discord.File(filename))
+                    os.remove(filename)
+
+        except Exception as e:
+            await message.channel.send(f"❌ 오류 발생: {e}")
+    
+    # ✅ TTS 목소리 목록 조회
+    elif message.content.startswith("!voice"):
+        try:
+            parts = message.content.strip().split()
+            language_filter = parts[1] if len(parts) > 1 else None
+
+            headers = {
+                "x-sup-api-key": SUPERTONEAI_API_KEY,
+                "Content-Type": "application/json"
+            }
+
+            # ✅ model 고정값 추가
+            params = {"model": "sona_speech_1"}
+            if language_filter:
+                params["language"] = language_filter
+
+            url = "https://supertoneapi.com/v1/voices/search"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, params=params) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        await message.channel.send(f"❌ Voice 목록 조회 실패 (status: {resp.status})\n{error_text}")
+                        return
+
+                    result = await resp.json()
+                    voices = result.get("items", [])
+                    if not voices:
+                        await message.channel.send("⚠️ 사용할 수 있는 Voice가 없습니다.")
+                        return
+
+                    lines = ["📢 **[사용 가능한 Voice 목록]**\n"]
+                    for v in voices[:10]:
+                        lines.append(
+                            f"- **{v.get('name', 'Unnamed')}**\n"
+                            f"  - ID: `{v.get('voice_id')}`\n"
+                            f"  - 언어: {', '.join(v.get('language', []))}\n"
+                            f"  - 스타일: {', '.join(v.get('styles', []))}\n"
+                            f"  - 모델: {', '.join(v.get('models', []))}\n"
+                        )
+
+                    await message.channel.send("\n".join(lines))
+
+        except Exception as e:
+            await message.channel.send(f"❌ 오류 발생: {e}")
+
 
 client.run(DISCORD_TOKEN)

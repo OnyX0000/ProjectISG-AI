@@ -107,6 +107,10 @@ def get_session(user_id: str, session_id: str, db: Session) -> dict:
                 if isinstance(state.get("asked_dimensions"), list):
                     state["asked_dimensions"] = set(state["asked_dimensions"])
                 
+                # ✅ 질문 수가 7 이상이면 completed 표시
+                if state.get("question_count", 0) >= 7:
+                    state["completed"] = True
+
                 # print(f"🔄 [DEBUG] 로딩된 세션 상태: {state}")
                 return state
             except json.JSONDecodeError as e:
@@ -158,8 +162,11 @@ def update_session(user_id: str, session_id: str, state: dict, db: Session):
                 del user_memories[(user_id, session_id)]
             print(f"✅ [INFO] ({user_id}, {session_id})의 메모리 릴리스 완료")
 
+            return mbti_type
+
         except Exception as e:
             print(f"❌ [ERROR] DB 저장 중 오류 발생: {e}")
+    return None
 
 # ✅ 응답 분석 결과에 따라 점수 갱신
 def update_score(state: Dict, judged: Dict[str, str]):

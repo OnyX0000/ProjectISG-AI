@@ -36,7 +36,14 @@ emotion_tag_mapping = {
 mbti_style_cache = {}
 
 def prepare_log_node(state: DiaryState) -> DiaryState:
-    sorted_group = state['group'].sort_values(by="timestamp")
+    group = state['group']
+    if group.empty:
+        print(f"⚠️ [경고] 유저 로그가 비어 있습니다. user_id={state.get('user_id')}, date={state.get('date')}")
+        state['log_text'] = "(해당 날짜에 기록된 활동이 없습니다.)"
+        # ✅ 전달받은 date를 그대로 유지
+        return state
+
+    sorted_group = group.sort_values(by="timestamp")
     log_text = "\n".join([
         f"[{row['ingame_datetime'].strftime('%Y-%m-%d')}] {row['action_type']} - {row['action_name']} @ {row['location']} | detail: {row['detail']}"
         + (f" (with: {row['with']})" if pd.notna(row['with']) and row['with'] else "")
