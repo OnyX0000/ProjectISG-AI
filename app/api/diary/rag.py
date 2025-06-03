@@ -1,6 +1,7 @@
 import os
 from langchain.chains import RetrievalQA
-from langchain_community.vectorstores import FAISS, Chroma
+from langchain_community.vectorstores import FAISS
+from langchain_chroma import Chroma
 from langchain_community.document_loaders import TextLoader
 from app.models.models import diary_llm, embedding_model, c_embedding_model
 from functools import lru_cache
