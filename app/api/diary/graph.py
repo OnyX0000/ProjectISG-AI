@@ -60,6 +60,7 @@ def retrieve_mbti_style_node(state: DiaryState) -> DiaryState:
         state['style_context'] = mbti_style_cache[mbti]
     else:
         rag_result = get_mbti_style(mbti)
+        print(rag_result)
         mbti_style_cache[mbti] = rag_result
         state['style_context'] = rag_result
 

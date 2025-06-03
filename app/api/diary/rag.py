@@ -70,7 +70,7 @@ c_retriever = chroma_store.as_retriever()
 # 🧠 RAG 체인 구성
 rag_chain = RetrievalQA.from_chain_type(
     llm=diary_llm,
-    retriever=c_retriever,
+    retriever=retriever,
     return_source_documents=False
 )
 
@@ -83,7 +83,7 @@ def get_mbti_style(mbti: str) -> str:
     # 🔄 결과가 없으면 기본값 반환
     if not result or len(result.strip()) == 0:
         return f"{mbti} 유형에 맞는 예시를 찾지 못했습니다."
-    
+
     # 🔄 검색된 결과 반환
     return result
 

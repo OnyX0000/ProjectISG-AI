@@ -28,7 +28,7 @@ prompt_template = ChatPromptTemplate.from_template("""
 4. 감정 키워드는 고요함, 성취감, 그리움, 연결감, 불안정, 몰입 중에서 1개만 선정해.
 5. 감정 태그는 감정 키워드에 mapping된 것을 작성해.
 6. 절대 한국어로만 작성해.
-7. 일지 분량은 400 토큰 이내로만 작성해.
+7. 일지 분량은 200 토큰 이내로만 작성해.
 """)
 
 emotion_tag_chain = (

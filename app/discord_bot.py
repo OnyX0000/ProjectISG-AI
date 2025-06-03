@@ -34,29 +34,20 @@ def find_latest_named_images(folder, name_keys):
 
 def help_message_text():
     return (
-        "📦 **__[ ASSET 생성 에이전트 사용법 ]__** 📦\n\n"
-        "**⚠️ 참고: 프롬프트는 가능하면 자세하면 좋습니다!!**\n\n"
-        "**⚠️ 참고: 프롬프트는 한글로 작성하셔도 됩니다!!**\n\n"        
-        "**🧾 사용 가능한 명령어 목록:**\n"
-        "`!sfx <프롬프트>[, 길이: float (예: 0.5 ~ 22.0)][, 가중치: float (0.0 ~ 1.0)]`\n"
-        "   - 🎵 예시: `!sfx 물 흐르는 소리, 3.0, 0.7`\n"
-        "     → `프롬프트`: 한글/영어로 묘사된 소리\n"
-        "     → `길이`: **0.5초 ~ 22.0초 사이** (선택)\n"
-        "     → `가중치`: **0.0 ~ 1.0 사이**의 값으로 프롬프트 강조 강도 조절 (선택)\n\n"
-        "`!3d <프롬프트>`\n"
-        "   - 🧊 예시: `!3d 나무로 만든 작은 의자`\n"
-        "     → `프롬프트`: **디테일한 묘사가 많을수록 좋습니다.**\n\n"
-        "`!tts <텍스트>, <voice_id>, <language>, <style>[, pitch_shift][, pitch_variance][, speed]`\n"
-        "   - 🗣️ 예시: `!tts 안녕하세요, sbd_v2_kor_jinho, ko, happy, 0.5, 0.2, 1.0`\n"
-        "     → `텍스트`: 읽어줄 문장 (한글 또는 영어)\n"
-        "     → `voice_id`: 사용 가능한 음성 ID 중 택 1\n"
-        "        - 예: `sbd_v2_kor_jinho`, `sbd_v2_kor_minho`, `sbd_v2_eng_emma` 등\n"
-        "     → `language`: 언어 코드 (예: `ko`, `en`)\n"
-        "     → `style`: 감정 스타일 (예: `neutral`, `happy`, `sad`, `angry`, `calm`, `joy`, `fear`, `disgust`, `surprise`, `trust`)\n"
-        "     → `pitch_shift`: 음 높이 조절값 (범위: `-2.0` ~ `2.0`, 기본값: `0.0`)\n"
-        "     → `pitch_variance`: 억양 다양성 조절 (범위: `0.0` ~ `1.0`, 기본값: `0.0`)\n"
-        "     → `speed`: 말하는 속도 (범위: `0.5` ~ `2.0`, 기본값: `1.0`)\n"
-
+        "📦 [ASSET 생성 에이전트 명령어 요약]\n\n"
+        "**🎵 !sfx** `<프롬프트>[, 길이: 0.5~22.0][, 가중치: 0.0~1.0]`\n"
+        "예: `!sfx 파도 소리, 3.0, 0.7`\n\n"
+        "**🧊 !3d** `<프롬프트>`\n"
+        "예: `!3d 나무로 만든 작은 의자`\n\n"
+        "**🗣️ !tts** `<문장>, <voice_id>, <언어>, <스타일>[, pitch, variance, speed]`\n"
+        "- pitch: -2.0 ~ 2.0 (기본 0.0)\n"
+        "- variance: 0.0 ~ 1.0 (기본 1.0)\n"
+        "- speed: 0.5 ~ 2.0 (기본 1.0)\n"
+        "- `voice_id`는 **!voice**로 조회\n"
+        "예: `!tts 집에 보내주세요 제발, aiko, ko, angry`\n\n"
+        "**📢 !voice** `<언어>[ key=value ... ]`\n"
+        "- 예: `!voice ko gender=female`, `!voice en age=young-adult`\n"
+        "- voice_id, 스타일, 언어, 나이, 이름, 성별, voice_id 등을 조회 가능\n"
     )
 
 # @client.event
@@ -273,23 +264,33 @@ async def on_message(message):
     # ✅ TTS 목소리 목록 조회
     elif message.content.startswith("!voice"):
         try:
+            # ✅ 메시지 파싱
             parts = message.content.strip().split()
-            language_filter = parts[1] if len(parts) > 1 else None
+            filters = {}
+
+            # 첫 번째 파라미터: 언어 필터
+            if len(parts) > 1:
+                filters["language"] = parts[1]
+
+            # 이후: key=value 형태 필터들
+            for part in parts[2:]:
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    if k in {"gender", "style", "age", "name"}:  # 허용된 필터만 추가
+                        filters[k] = v
+
+            # ✅ model은 고정값
+            filters["model"] = "sona_speech_1"
 
             headers = {
                 "x-sup-api-key": SUPERTONEAI_API_KEY,
                 "Content-Type": "application/json"
             }
 
-            # ✅ model 고정값 추가
-            params = {"model": "sona_speech_1"}
-            if language_filter:
-                params["language"] = language_filter
-
             url = "https://supertoneapi.com/v1/voices/search"
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers, params=params) as resp:
+                async with session.get(url, headers=headers, params=filters) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
                         await message.channel.send(f"❌ Voice 목록 조회 실패 (status: {resp.status})\n{error_text}")
@@ -301,12 +302,15 @@ async def on_message(message):
                         await message.channel.send("⚠️ 사용할 수 있는 Voice가 없습니다.")
                         return
 
+                    # ✅ 결과 출력
                     lines = ["📢 **[사용 가능한 Voice 목록]**\n"]
                     for v in voices[:10]:
                         lines.append(
                             f"- **{v.get('name', 'Unnamed')}**\n"
                             f"  - ID: `{v.get('voice_id')}`\n"
                             f"  - 언어: {', '.join(v.get('language', []))}\n"
+                            f"  - 성별: {v.get('gender', 'Unknown')}\n"
+                            f"  - 나이대: {v.get('age', 'Unknown')}\n"
                             f"  - 스타일: {', '.join(v.get('styles', []))}\n"
                             f"  - 모델: {', '.join(v.get('models', []))}\n"
                         )
@@ -315,6 +319,5 @@ async def on_message(message):
 
         except Exception as e:
             await message.channel.send(f"❌ 오류 발생: {e}")
-
 
 client.run(DISCORD_TOKEN)
