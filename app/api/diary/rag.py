@@ -1,13 +1,15 @@
 import os
 from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
+from langchain_chroma import Chroma
 from langchain_community.document_loaders import TextLoader
-from app.models.models import diary_llm, embedding_model
+from app.models.models import diary_llm, embedding_model, c_embedding_model
 from functools import lru_cache
 
 CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 MBTI_STYLE_PATH = os.path.abspath(os.path.join(CURRENT_FILE_DIR, "../../../static/mbti_styles.txt"))
 FAISS_DB_DIR = os.path.abspath(os.path.join(CURRENT_FILE_DIR, "../../../DB/faiss_store"))
+CHROMA_DB_DIR = os.path.abspath(os.path.join(CURRENT_FILE_DIR, "../../../DB/chroma_store"))
 
 # 🚨 존재 여부를 명시적으로 검사
 if not os.path.exists(MBTI_STYLE_PATH):
@@ -15,6 +17,7 @@ if not os.path.exists(MBTI_STYLE_PATH):
 
 # ✅ FAISS 저장 경로가 없다면 생성
 os.makedirs(FAISS_DB_DIR, exist_ok=True)
+os.makedirs(CHROMA_DB_DIR, exist_ok=True)
 
 # 📦 FAISS 벡터스토어 로드 또는 새로 생성
 index_file = os.path.join(FAISS_DB_DIR, "index.faiss")
@@ -23,6 +26,7 @@ store_file = os.path.join(FAISS_DB_DIR, "index.pkl")
 # 🔄 문서 로딩 & 분리
 if os.path.exists(index_file) and os.path.exists(store_file):
     vectorstore = FAISS.load_local(FAISS_DB_DIR, embedding_model, allow_dangerous_deserialization=True)
+    chroma_store = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=c_embedding_model)
 else:
     # 🔄 텍스트 파일 읽기
     with open(MBTI_STYLE_PATH, 'r', encoding='utf-8') as f:
@@ -56,8 +60,13 @@ else:
     vectorstore = FAISS.from_documents(documents, embedding_model)
     vectorstore.save_local(FAISS_DB_DIR)
 
+        # 🔄 Chroma 저장 (✅ 추가됨)
+    chroma_store = Chroma.from_documents(documents, c_embedding_model, persist_directory=CHROMA_DB_DIR)
+    chroma_store.persist()
+
 # 🔎 retriever 생성
 retriever = vectorstore.as_retriever()
+c_retriever = chroma_store.as_retriever()
 
 # 🧠 RAG 체인 구성
 rag_chain = RetrievalQA.from_chain_type(
@@ -75,7 +84,7 @@ def get_mbti_style(mbti: str) -> str:
     # 🔄 결과가 없으면 기본값 반환
     if not result or len(result.strip()) == 0:
         return f"{mbti} 유형에 맞는 예시를 찾지 못했습니다."
-    
+
     # 🔄 검색된 결과 반환
     return result
 

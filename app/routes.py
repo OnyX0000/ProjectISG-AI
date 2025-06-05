@@ -12,6 +12,7 @@ from pathlib import Path
 import pandas as pd
 import os
 import shutil
+import json
 from app.api.mbti.logic import generate_question, judge_response 
 from app.utils.mbti_helper import init_mbti_state, update_score, get_session, update_session, get_mbti_profile, finalize_mbti
 from app.models.models import UserLog, UserMBTI
@@ -190,12 +191,19 @@ async def ask(input: MBTIAskRequest, db: DbSession = Depends(get_db)):
     session_state["current_dimension"] = dim
     update_session(input.user_id, input.session_id, session_state, db)
 
-    return {"question": q, "dimension": dim, "completed": False}
+    return {"question": q, "dimension": dim, "completed": False, "q_num": 7}
 
 class MBTIAnswerRequest(BaseModel):
     user_id: str
     session_id: str
     response: str
+
+# ✅ 상대 경로로 MBTI 프로필 JSON 로드
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+MBTI_PROFILE_PATH = os.path.join(CURRENT_DIR, "../static/JSON/mbti_profile.json")
+
+with open(MBTI_PROFILE_PATH, "r", encoding="utf-8") as f:
+    MBTI_PROFILES = json.load(f)
 
 @mbti_router.post("/answer")
 async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
@@ -210,7 +218,7 @@ async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
     current_dimension = session_state["current_dimension"]
     asked_set = set(session_state["asked_dimensions"])
     asked_set.add(current_dimension)
-    session_state["asked_dimensions"] = list(asked_set)  
+    session_state["asked_dimensions"] = list(asked_set)
 
     session_state["conversation_history"].append(
         f"Q: {session_state['current_question']}\nA: {input.response}"
@@ -221,15 +229,25 @@ async def answer(input: MBTIAnswerRequest, db: DbSession = Depends(get_db)):
     judged = judge_response(input.response, session_state["current_dimension"])
     update_score(session_state, judged)
 
-    # ✅ 7회 QA가 끝나면 자동으로 메모리 릴리스 및 DB 저장
     session_state["question_count"] += 1
-    update_session(input.user_id, input.session_id, session_state, db)  # ✅ db 전달
+    update_session(input.user_id, input.session_id, session_state, db)
+
+    final_mbti = update_session(input.user_id, input.session_id, session_state, db)
 
     if session_state["question_count"] >= 7:
-        print(f"✅ [INFO] ({input.user_id}, {input.session_id})의 세션 종료 및 메모리 릴리스")
-        return {"message": "MBTI 테스트가 완료되었습니다. 세션이 종료되었습니다.", "completed": True}
+        mbti_type = final_mbti or "UNKNOWN"
+        judged_sentence = f"당신의 성향 테스트 결과는 {mbti_type}입니다."
 
-    return {"message": "응답이 저장되었습니다. 다음 질문을 요청하세요.", "judged": judged, "completed": False}
+        return {
+            "message": "MBTI 테스트가 완료되었습니다.",
+            "judged": judged_sentence,
+            "completed": True
+        }
+    return {
+        "message": "응답이 저장되었습니다. 다음 질문을 요청하세요.",
+        "judged": judged,
+        "completed": False
+    }
 
 @mbti_router.get("/users")
 async def get_users(limit: int = Query(default=3, description="조회할 사용자 수"), db: DbSession = Depends(get_db)):
@@ -262,6 +280,59 @@ async def get_users(limit: int = Query(default=3, description="조회할 사용�
     }
 
     return result
+
+@mbti_router.post("/skip")
+async def skip_mbti(
+    user_id: str = Body(...),
+    session_id: str = Body(...),
+    db: DbSession = Depends(get_db)
+):
+    """
+    사용자가 MBTI 테스트를 스킵할 경우,
+    INTJ("조용한 효율 추구의 분석가")로 PostgreSQL users 테이블에 저장합니다.
+    """
+
+    # ✅ 기존 데이터 중복 확인
+    existing = db.query(UserMBTI).filter(
+        UserMBTI.user_id == user_id,
+        UserMBTI.session_id == session_id
+    ).first()
+
+    if existing:
+        return {"message": "이미 MBTI 정보가 저장되어 있습니다.", "mbti_type": existing.mbti_type}
+
+    # ✅ 스킵 시 지정할 INTJ 프로필 하드코딩
+    mbti_type = "INTJ"
+    profile = {
+        "name": "조용한 효율 추구의 분석가",
+        "summary": "전략적 사고와 목표 지향적 계획에 능함.",
+        "content": "혼자서 깊이 있게 사고하며 효율적인 방법을 찾는 데 집중합니다. 독립적이며 목표 달성을 위한 체계적인 접근을 선호합니다."
+    }
+
+    # ✅ DB 삽입
+    new_user = UserMBTI(
+        user_id=user_id,
+        session_id=session_id,
+        mbti_type=mbti_type,
+        name=profile["name"],
+        summary=profile["summary"],
+        content=profile["content"]
+    )
+
+    try:
+        db.add(new_user)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"DB 저장 중 오류 발생: {str(e)}")
+
+    return {
+        "message": "MBTI 테스트를 건너뛴 사용자에게 INTJ 성향이 저장되었습니다.",
+        "user_id": user_id,
+        "session_id": session_id,
+        "mbti_type": mbti_type,
+        "assigned_profile": profile
+    }
 
 @diary_router.post("/generate_diary")
 async def generate_diary_endpoint(
@@ -316,7 +387,8 @@ async def generate_diary_endpoint(
     formatted_response.update({
         "message": "Diary generated successfully.",
         "best_screenshot_filename": best_screenshot_filename,
-        "formatted_date": formatted_ingame_date
+        "formatted_date": formatted_ingame_date,
+        "mbti_name": MBTI_PROFILES.get(mbti, {}).get("name", "")    
     })
 
     return formatted_response

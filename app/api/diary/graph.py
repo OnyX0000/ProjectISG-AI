@@ -36,7 +36,14 @@ emotion_tag_mapping = {
 mbti_style_cache = {}
 
 def prepare_log_node(state: DiaryState) -> DiaryState:
-    sorted_group = state['group'].sort_values(by="timestamp")
+    group = state['group']
+    if group.empty:
+        print(f"⚠️ [경고] 유저 로그가 비어 있습니다. user_id={state.get('user_id')}, date={state.get('date')}")
+        state['log_text'] = "(해당 날짜에 기록된 활동이 없습니다.)"
+        # ✅ 전달받은 date를 그대로 유지
+        return state
+
+    sorted_group = group.sort_values(by="timestamp")
     log_text = "\n".join([
         f"[{row['ingame_datetime'].strftime('%Y-%m-%d')}] {row['action_type']} - {row['action_name']} @ {row['location']} | detail: {row['detail']}"
         + (f" (with: {row['with']})" if pd.notna(row['with']) and row['with'] else "")
@@ -48,24 +55,37 @@ def prepare_log_node(state: DiaryState) -> DiaryState:
 
 def retrieve_mbti_style_node(state: DiaryState) -> DiaryState:
     mbti = state.get("mbti", "INFP")
-    
+
     if mbti in mbti_style_cache:
         state['style_context'] = mbti_style_cache[mbti]
     else:
-        # ✅ 병렬 처리로 RAG와 DuckDuckGo 호출
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            rag_future = executor.submit(get_mbti_style, mbti)
-            agent_future = executor.submit(retrieve_mbti_style_from_web, mbti)
-            
-            rag_result = rag_future.result()
-            agent_result = agent_future.result()
-        
-        # 🔄 결과 결합
-        combined_result = f"{rag_result}\n\n🔎 [Web Search Result]\n{agent_result}"
-        mbti_style_cache[mbti] = combined_result
-        state['style_context'] = combined_result
-    
+        rag_result = get_mbti_style(mbti)
+        print(rag_result)
+        mbti_style_cache[mbti] = rag_result
+        state['style_context'] = rag_result
+
     return state
+
+# def retrieve_mbti_style_node(state: DiaryState) -> DiaryState:
+#     mbti = state.get("mbti", "INFP")
+    
+#     if mbti in mbti_style_cache:
+#         state['style_context'] = mbti_style_cache[mbti]
+#     else:
+#         # ✅ 병렬 처리로 RAG와 DuckDuckGo 호출
+#         with ThreadPoolExecutor(max_workers=2) as executor:
+#             rag_future = executor.submit(get_mbti_style, mbti)
+#             agent_future = executor.submit(retrieve_mbti_style_from_web, mbti)
+            
+#             rag_result = rag_future.result()
+#             agent_result = agent_future.result()
+        
+#         # 🔄 결과 결합
+#         combined_result = f"{rag_result}\n\n🔎 [Web Search Result]\n{agent_result}"
+#         mbti_style_cache[mbti] = combined_result
+#         state['style_context'] = combined_result
+    
+#     return state
 
 def assign_emotion_node(state: DiaryState) -> DiaryState:
     selected_emotion = random.choice(emotion_list)
@@ -128,15 +148,6 @@ def generate_diary_node_factory(mbti: str):
 
     return node
 
-def output_node(state: DiaryState) -> DiaryState:
-    if "diary" not in state or not state["diary"]:
-        state["diary"] = "❌ 감성 일지 생성 중 오류가 발생했습니다."
-    if "emotion_tags" not in state or not state["emotion_tags"]:
-        state["emotion_tags"] = ["#오류", "#생성실패"]
-    if "emotion_keywords" not in state or not state["emotion_keywords"]:
-        state["emotion_keywords"] = ["오류"]
-    return state
-
 def generate_emotion_info(state: DiaryState) -> DiaryState:
     result = emotion_tag_chain.invoke({"diary": state["diary"]})
     state["emotion_keywords"] = result.get("keywords", [])
@@ -158,11 +169,11 @@ def build_diary_graph() -> StateGraph:
     builder.add_node("generate_diary_default", RunnableLambda(default_diary_node))
 
     builder.add_node("generate_emotion_info", RunnableLambda(generate_emotion_info))
-    builder.add_node("output", RunnableLambda(output_node))
+    builder.add_node("output", lambda state: state)
 
     builder.set_entry_point("prepare_log")
-    builder.add_edge("prepare_log", "retrieve_mbti", on_error = "output")
-    builder.add_edge("retrieve_mbti", "assign_emotion", on_error = "output")
+    builder.add_edge("prepare_log", "retrieve_mbti")
+    builder.add_edge("retrieve_mbti", "assign_emotion")
 
     def route_by_mbti(state: DiaryState) -> str:
         node_key = f"generate_diary_{state.get('mbti', 'INTP')}"
@@ -174,8 +185,8 @@ def build_diary_graph() -> StateGraph:
     builder.add_conditional_edges("assign_emotion", route_by_mbti, route_map)
 
     for node in route_map.values():
-        builder.add_edge(node, "generate_emotion_info", on_error = "output")
-    builder.add_edge("generate_emotion_info", "output", on_error = "output")
+        builder.add_edge(node, "generate_emotion_info")
+    builder.add_edge("generate_emotion_info", "output")
 
     builder.set_finish_point("output")
     return builder.compile()
