@@ -84,7 +84,7 @@ google-auth==2.40.2
 google-auth-httplib2==0.2.0
 google-generativeai==0.8.5
 googleapis-common-protos==1.70.0
-gradio==5.29.0
+gradio==5.34.0
 gradio_client==1.10.0
 greenlet==3.2.1
 groovy==0.1.2
@@ -270,7 +270,7 @@ rdflib==6.3.2
 referencing==0.36.2
 regex==2024.11.6
 rembg==2.0.65
-requests==2.32.3
+requests==2.34.0
 requests-oauthlib==2.0.0
 requests-toolbelt==1.0.0
 rich==14.0.0
@@ -317,11 +317,11 @@ tokenizers==0.21.1
 toml==0.10.2
 tomli==2.2.1
 tomlkit==0.13.2
-torch==2.7.0
+torch==2.7.2
 torchaudio==2.7.0+cu118
 torchsde==0.2.6
 torchvision==0.22.0
-tornado==6.4.2
+tornado==6.5.0
 tqdm==4.67.1
 traitlets @ file:///home/conda/feedstock_root/build_artifacts/traitlets_1733367359838/work
 traits==7.0.2
