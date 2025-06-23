@@ -11,7 +11,9 @@
 ![Image](https://github.com/user-attachments/assets/e866eb0d-57d8-4803-a4a9-371be86682e9)
 ![Image](https://github.com/user-attachments/assets/526a5fae-ca98-46cb-ac2b-d881f24126b2)
 
-
+## 디스코드 에셋 생성
+![Image](https://github.com/user-attachments/assets/1583eee6-cc1a-4256-ab2d-898173fc4659)
+![Image](https://github.com/user-attachments/assets/f4fd6f8d-4be9-4641-a478-0f14945d43a5)
 
 ---
 ## 📌 1️⃣ 프로젝트 개요
