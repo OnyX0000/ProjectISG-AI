@@ -4,7 +4,7 @@
 
 ---
 
-프로토타입 발표자료 링크(Canva) : [https://www.canva.com/design/DAGm2FBkNCA/_2F5ffQoJRMfjoidKDWaSQ/view?utm_content=DAGm2FBkNCA&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h8e6b62348e]
+발표자료 링크(Canva) : [[https://www.canva.com/design/DAGm2FBkNCA/_2F5ffQoJRMfjoidKDWaSQ/view?utm_content=DAGm2FBkNCA&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h8e6b62348e](https://www.canva.com/design/DAGpFri1Psc/8Qdu-G4EM12JpsM9bEOmXg/view?utm_content=DAGpFri1Psc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h09cc5a9eb8)]
 
 ---
 
