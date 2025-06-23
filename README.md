@@ -1,10 +1,10 @@
-# ProjectISG-AI(현재 진행중)
+# ProjectISG-AI
 
 **ProjectISG-AI**는 감성일지 생성, MBTI 분석, 행동 로그 관리, SFX 생성 등 다양한 기능을 제공하는 FastAPI 기반의 백엔드 프로젝트입니다. 해당 프로젝트는 단순한 AI 기술 시연을 넘어, 실제 게임 내 기능으로 적용 가능한 AI 모듈을 직접 설계·구현하여 게임 개발 및 서비스에 실질적인 도구로 활용하는 것을 핵심 목표로 합니다.
 
 ---
 
-프로토타입 발표자료 링크(Canva) : [https://www.canva.com/design/DAGm2FBkNCA/_2F5ffQoJRMfjoidKDWaSQ/view?utm_content=DAGm2FBkNCA&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h8e6b62348e]
+발표자료 링크(Canva) : [[https://www.canva.com/design/DAGm2FBkNCA/_2F5ffQoJRMfjoidKDWaSQ/view?utm_content=DAGm2FBkNCA&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h8e6b62348e](https://www.canva.com/design/DAGpFri1Psc/8Qdu-G4EM12JpsM9bEOmXg/view?utm_content=DAGpFri1Psc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h09cc5a9eb8)]
 
 ---
 
